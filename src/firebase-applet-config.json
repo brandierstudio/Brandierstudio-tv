@@ -1,0 +1,8 @@
+{
+  "apiKey": "stub-api-key-or-placeholder",
+  "authDomain": "stub-auth-domain",
+  "projectId": "stub-project-id",
+  "storageBucket": "stub-storage-bucket",
+  "messagingSenderId": "stub-messaging-sender",
+  "appId": "stub-app-id"
+}

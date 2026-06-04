@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      (function() {
+        try {
+          var currentFetch = window.fetch;
+          
+          // Try to make fetch writable on Window.prototype if it exists there
+          try {
+            var proto = Object.getPrototypeOf(window);
+            if (proto && ('fetch' in proto)) {
+              Object.defineProperty(proto, 'fetch', {
+                configurable: true,
+                enumerable: true,
+                get: function() { return currentFetch; },
+                set: function(val) { currentFetch = val; }
+              });
+            }
+          } catch (e) {}
+
+          // Ensure it's writable on the window instance itself
+          try {
+            Object.defineProperty(window, 'fetch', {
+              configurable: true,
+              enumerable: true,
+              get: function() { return currentFetch; },
+              set: function(val) { currentFetch = val; }
+            });
+          } catch (e) {}
+        } catch (err) {
+          console.warn("Could not patch window.fetch:", err);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

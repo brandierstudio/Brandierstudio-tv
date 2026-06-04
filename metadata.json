@@ -1,0 +1,6 @@
+{
+  "name": "BrandierStudioTV",
+  "description": "Premium AI media platform for AI-generated videos, motion graphics, visuals, and creative projects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

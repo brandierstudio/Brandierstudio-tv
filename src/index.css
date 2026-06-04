@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300..700;1,300..700&family=Inter:ital,wght@0,300..900;1,300..900&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-serif: "Cormorant Garamond", serif;
+
+  --color-brand-bg: #F6F7F8;
+  --color-brand-card: #FFFFFF;
+  --color-brand-text: #111111;
+  --color-brand-border: #E5E7EB;
+  --color-brand-accent: #000000;
+}
+
+/* Multi-blush purple/violet gradient text and background textures */
+.purple-blush-bg {
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 35%, #C084FC 70%, #EC4899 100%);
+}
+
+.purple-blush-text {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 40%, #D8B4FE 70%, #F472B6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.purple-glow-glow {
+  background: radial-gradient(circle at 20% 20%, rgba(124, 58, 237, 0.1) 0%, rgba(192, 132, 252, 0.05) 50%, transparent 100%),
+              radial-gradient(circle at 80% 80%, rgba(236, 72, 153, 0.08) 0%, rgba(99, 102, 241, 0.05) 50%, transparent 100%);
+}
+
+/* Base Body Styles */
+body {
+  background-color: var(--color-brand-bg);
+  color: var(--color-brand-text);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom premium thin scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F1F1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Elegant glassmorphism values */
+.glass-nav {
+  background-color: rgba(246, 247, 248, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+/* Hide horizontal scrollbar but preserve swipe */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Watermark styles */
+.watermark-overlay {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Custom masonry classes */
+.masonry-grid {
+  display: flex;
+  margin-left: -16px; /* gutter size offset */
+  width: auto;
+}
+.masonry-grid_column {
+  padding-left: 16px; /* gutter size */
+  background-clip: padding-box;
+}
+
+/* Masonry items spacing */
+.masonry-grid_column > div {
+  margin-bottom: 16px;
+}
