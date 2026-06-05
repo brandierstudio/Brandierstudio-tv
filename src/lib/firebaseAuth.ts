@@ -13,7 +13,7 @@ import {
   signOut as firebaseSignOut
 } from 'firebase/auth';
 import { Lead } from '../types';
-import realConfig from '../firebase-applet-config.json';
+import realConfig from '../firebase-stub-config.json';
 
 // Safe lazy initialization of Firebase configuration
 let app;

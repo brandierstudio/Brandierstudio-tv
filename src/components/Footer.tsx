@@ -32,36 +32,45 @@ export default function Footer({ onNavigate }: FooterProps) {
               className="flex items-center gap-3 cursor-pointer group text-left"
               id="footer-logo-btn"
             >
-              <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white shadow-sm p-1">
-                <BrandierLogo className="w-full h-full text-white" />
+              <div className="w-8 h-8 flex items-center justify-center text-black">
+                <BrandierLogo className="w-full h-full text-black" />
               </div>
               <span className="font-display font-bold text-lg tracking-tight text-black flex items-center gap-1">
                 BrandierStudio<span className="font-mono text-xs px-1.5 py-0.5 bg-black text-white rounded-md tracking-widest uppercase">TV</span>
               </span>
             </button>
             <p className="text-sm text-gray-500 max-w-sm font-medium leading-relaxed">
-              Curating the absolute peak of artificial intelligence cinematography, UGC ad creatives, high-fashion storytelling, and responsive motion graphics.
+              Curating the absolute peak of artificial intelligence cinematography, UGC ad creatives, high-fashion storytelling, and responsive motion graphics. 
+              {" "}
+              <a 
+                href="https://anasbinmehboob.github.io/brandier-studio/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-purple-600 hover:text-purple-700 underline font-semibold inline-block"
+              >
+                Visit Our Official Website
+              </a>
             </p>
             <div className="flex items-center gap-4 pt-2">
               <a 
-                href="https://youtube.com" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+                href="mailto:brandierstudio@gmail.com" 
                 className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-black hover:border-black transition-all"
-                aria-label="YouTube"
-                id="footer-youtube-link"
+                aria-label="Email Inquiry"
+                title="brandierstudio@gmail.com"
+                id="footer-email-link"
               >
-                <Youtube className="w-4 h-4" />
+                <span className="text-xs font-bold font-mono">@</span>
               </a>
               <a 
-                href="https://instagram.com" 
+                href="https://anasbinmehboob.github.io/brandier-studio/" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-black hover:border-black transition-all"
-                aria-label="Instagram"
-                id="footer-instagram-link"
+                className="w-8 h-8 rounded-lg border border-purple-200 flex items-center justify-center text-purple-500 hover:text-purple-700 hover:border-purple-500 transition-all bg-purple-50/50"
+                aria-label="Official Website"
+                title="Visit Studio Website"
+                id="footer-website-link"
               >
-                <Instagram className="w-4 h-4" />
+                <span className="text-xs font-bold">W</span>
               </a>
               <a 
                 href="https://linkedin.com" 
@@ -69,6 +78,7 @@ export default function Footer({ onNavigate }: FooterProps) {
                 rel="noopener noreferrer" 
                 className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-black hover:border-black transition-all"
                 aria-label="LinkedIn"
+                title="Brandier studio LinkedIn"
                 id="footer-linkedin-link"
               >
                 <Linkedin className="w-4 h-4" />

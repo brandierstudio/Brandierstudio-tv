@@ -51,8 +51,8 @@ export default function Navbar({
                 className="flex items-center gap-3 group text-left cursor-pointer"
                 id="navbar-logo-btn"
               >
-                <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center text-white font-semibold shadow-sm transition-transform duration-300 group-hover:scale-105 p-1.5">
-                  <BrandierLogo className="w-full h-full text-white" />
+                <div className="w-10 h-10 flex items-center justify-center text-black transition-transform duration-300 group-hover:scale-105">
+                  <BrandierLogo className="w-full h-full text-black" />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-display font-bold text-lg tracking-tight text-black leading-none flex items-center gap-1">

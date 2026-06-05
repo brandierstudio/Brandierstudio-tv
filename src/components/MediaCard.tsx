@@ -42,8 +42,8 @@ export default function MediaCard({
           <div className="absolute inset-0 bg-linear-to-br from-[#FAFAFA]/70 via-white/50 to-[#F3F4F6]/20 backdrop-blur-xs flex flex-col items-center justify-center p-4">
             {/* Subtle decorative dot grid background for artistic tech feeling */}
             <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
-            <div className="w-14 h-14 opacity-40 group-hover:opacity-85 group-hover:scale-110 transition-all duration-500 ease-out z-0">
-              <BrandierLogo className="w-full h-full text-purple-600" usePurpleGradient={true} />
+            <div className="w-14 h-14 opacity-40 group-hover:opacity-85 group-hover:scale-110 transition-all duration-500 ease-out z-0 text-black">
+              <BrandierLogo className="w-full h-full text-black" />
             </div>
           </div>
         ) : (

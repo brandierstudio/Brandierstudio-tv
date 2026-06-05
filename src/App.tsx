@@ -350,8 +350,8 @@ export default function App() {
                       {featuredItem && (featuredItem.type === 'video' || featuredItem.type === 'motion') ? (
                         <div className="absolute inset-0 bg-linear-to-br from-[#FAFAFA]/70 via-white/50 to-[#F3F4F6]/20 backdrop-blur-xs flex flex-col items-center justify-center p-4">
                           <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
-                          <div className="w-16 h-16 opacity-40 group-hover:opacity-85 group-hover:scale-110 transition-all duration-500 ease-out z-0">
-                            <BrandierLogo className="w-full h-full text-purple-600" usePurpleGradient={true} />
+                          <div className="w-16 h-16 opacity-40 group-hover:opacity-85 group-hover:scale-110 transition-all duration-500 ease-out z-0 text-black">
+                            <BrandierLogo className="w-full h-full text-black" />
                           </div>
                         </div>
                       ) : (
@@ -774,18 +774,18 @@ export default function App() {
               Get In Touch With Curators
             </h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-normal">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-normal">
               <a 
-                href="mailto:curated@brandierstudiotv.com" 
-                className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-black hover:bg-gray-50 transition-all font-medium"
+                href="mailto:brandierstudio@gmail.com" 
+                className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-purple-600 hover:bg-[#FAF9FF] transition-all font-medium group"
                 id="contact-email-link"
               >
-                <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-black">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 group-hover:bg-purple-100 flex items-center justify-center text-[#7C3AED] transition-colors">
                   <Mail className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="text-gray-400 text-[10px] font-mono font-bold uppercase tracking-wider">Email Inquiry</p>
-                  <p className="text-black font-semibold">curate@brandier.com</p>
+                  <p className="text-black font-semibold group-hover:text-purple-600 transition-colors">brandierstudio@gmail.com</p>
                 </div>
               </a>
 
@@ -793,15 +793,31 @@ export default function App() {
                 href="https://linkedin.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-black hover:bg-gray-50 transition-all font-medium"
+                className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-purple-600 hover:bg-[#FAF9FF] transition-all font-medium group"
                 id="contact-linkedin-link"
               >
-                <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-black">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 group-hover:bg-purple-100 flex items-center justify-center text-[#7C3AED] transition-colors">
                   <Linkedin className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="text-gray-400 text-[10px] font-mono font-bold uppercase tracking-wider">Agency Network</p>
-                  <p className="text-black font-semibold">Brandier Studio LinkedIn</p>
+                  <p className="text-black font-semibold group-hover:text-purple-600 transition-colors">Brandier studio</p>
+                </div>
+              </a>
+
+              <a 
+                href="https://anasbinmehboob.github.io/brandier-studio/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-4 border border-purple-100 bg-[#FAF9FF] rounded-xl hover:border-purple-600 hover:bg-purple-50 transition-all font-medium group sm:col-span-1"
+                id="contact-website-link"
+              >
+                <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white">
+                  <ExternalLink className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-purple-500 text-[10px] font-mono font-bold uppercase tracking-wider">Official Site</p>
+                  <p className="text-purple-900 font-bold">brandier-studio</p>
                 </div>
               </a>
             </div>

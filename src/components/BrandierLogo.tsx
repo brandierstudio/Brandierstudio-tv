@@ -14,27 +14,17 @@ interface BrandierLogoProps {
 export default function BrandierLogo({
   className = 'text-current',
   size = '100%',
-  usePurpleGradient = true, // default to true to align with brand request!
 }: BrandierLogoProps) {
-  const fillValue = usePurpleGradient ? 'url(#purpleBlushGrad)' : 'currentColor';
   return (
     <svg
       viewBox="0 0 500 500"
       width={size}
       height={size}
-      fill={fillValue}
+      fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="purpleBlushGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#4F46E5" />
-          <stop offset="30%" stopColor="#7C3AED" />
-          <stop offset="65%" stopColor="#C084FC" />
-          <stop offset="100%" stopColor="#EC4899" />
-        </linearGradient>
-      </defs>
       {/* 
         High-fidelity mathematical reconstruction of the BrandierStudioTV 
         interlocking geometric spiral hexagonal aperture logo.

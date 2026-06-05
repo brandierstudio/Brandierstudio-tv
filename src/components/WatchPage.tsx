@@ -62,8 +62,8 @@ export default function WatchPage({
           {isComingSoon ? (
             <div className="relative aspect-video w-full rounded-[24px] overflow-hidden bg-gradient-to-br from-[#FAFAFA]/70 via-white/50 to-[#F3F4F6]/20 border border-neutral-200/50 shadow-2xl flex flex-col items-center justify-center p-8 text-center group">
               <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:20px_20px]" />
-              <div className="w-24 h-24 mb-6 tracking-normal hover:rotate-6 duration-300 transition-transform">
-                <BrandierLogo className="w-full h-full text-purple-600 animate-pulse" usePurpleGradient={true} />
+              <div className="w-24 h-24 mb-6 tracking-normal hover:rotate-6 duration-300 transition-transform text-black">
+                <BrandierLogo className="w-full h-full text-black animate-pulse" />
               </div>
               <h2 className="font-display font-medium text-2xl text-black tracking-tight leading-none">
                 Coming Soon

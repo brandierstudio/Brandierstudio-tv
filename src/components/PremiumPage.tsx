@@ -79,8 +79,8 @@ export default function PremiumPage({
               transition={{ duration: 0.5 }}
               className="max-w-md w-full bg-white/95 backdrop-blur-xl border border-neutral-200/80 p-8 sm:p-10 rounded-3xl shadow-2xl text-center space-y-6"
             >
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto shadow-lg p-2 bg-linear-to-br from-indigo-600 via-purple-600 to-pink-500">
-                <BrandierLogo className="w-full h-full text-white" usePurpleGradient={false} />
+              <div className="w-14 h-14 flex items-center justify-center mx-auto text-black">
+                <BrandierLogo className="w-full h-full text-black" />
               </div>
 
               <div className="space-y-2">
