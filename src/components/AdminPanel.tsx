@@ -621,10 +621,13 @@ export default function AdminPanel({
                 <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="py-4 px-6 flex items-center gap-3">
                     <img
-                      src={item.thumbnailUrl}
+                      src={getResolvedThumbnail(item.thumbnailUrl, item.videoUrl, item.title, item.category)}
                       alt={item.title}
                       referrerPolicy="no-referrer"
-                      className="w-14 h-10 rounded-lg object-cover border border-gray-100"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = getResolvedThumbnail(undefined, item.videoUrl, item.title, item.category);
+                      }}
+                      className="w-14 h-10 rounded-lg object-cover border border-gray-100 bg-neutral-50"
                     />
                     <div className="max-w-[280px] sm:max-w-[400px]">
                       <p className="font-semibold text-gray-900 group-hover:text-black line-clamp-1">

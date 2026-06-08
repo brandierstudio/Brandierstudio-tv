@@ -171,7 +171,7 @@ export default function App() {
           throw new Error('Server returned non-200 status');
         })
         .then((serverItems: MediaItem[]) => {
-          if (serverItems && Array.isArray(serverItems) && serverItems.length > 0) {
+          if (serverItems && Array.isArray(serverItems)) {
             setMediaItems(serverItems);
             saveStoredMedia(serverItems);
           }
