@@ -3,33 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   ShieldCheck, 
   Plus, 
   Trash2, 
   Edit3, 
-  Settings, 
   LogOut, 
   CheckCircle, 
   Save, 
-  Sliders, 
-  RefreshCw, 
   Layers, 
-  FileSpreadsheet, 
-  Database, 
-  Link, 
-  ExternalLink, 
-  CloudRain, 
-  Lock, 
   Mail, 
-  CheckSquare 
+  CheckSquare,
+  X,
+  FileVideo,
+  Monitor
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MediaItem, Lead } from '../types';
-import { CATEGORIES, TOOLS, resetMediaToDefault } from '../db/mockDb';
-import { googleSignIn, googleSignOut, initAuth, syncLeadsToGoogleSheet } from '../lib/firebaseAuth';
-import { User } from 'firebase/auth';
+import { CATEGORIES, TOOLS } from '../db/mockDb';
+
+const getYoutubeId = (url: string | undefined): string | null => {
+  if (!url) return null;
+  const cleanUrl = url.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+    return cleanUrl;
+  }
+  const ytMatch = cleanUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+  return (ytMatch && ytMatch[1]) ? ytMatch[1] : null;
+};
 
 interface AdminPanelProps {
   mediaItems: MediaItem[];
@@ -37,6 +39,8 @@ interface AdminPanelProps {
   onNavigate: (path: string) => void;
   leads?: Lead[];
   onClearLeads?: () => void;
+  onApproveLead?: (email: string) => void;
+  onRejectLead?: (email: string) => void;
 }
 
 export default function AdminPanel({
@@ -45,102 +49,29 @@ export default function AdminPanel({
   onNavigate,
   leads = [],
   onClearLeads,
+  onApproveLead,
+  onRejectLead,
 }: AdminPanelProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // OAuth & Google Sheets States
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string>('');
-  const [spreadsheetId, setSpreadsheetId] = useState(() => {
-    return localStorage.getItem('brandier_spreadsheet_id') || '';
-  });
-  const [sheetStatus, setSheetStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [sheetErrorMsg, setSheetErrorMsg] = useState('');
-
-  // Synchronize Auth listener for Sheets connection
-  useEffect(() => {
-    const unsub = initAuth(
-      (user, token) => {
-        setCurrentUser(user);
-        setAccessToken(token);
-      },
-      () => {
-        setCurrentUser(null);
-        setAccessToken('');
-      }
-    );
-    return () => unsub && unsub();
-  }, []);
-
-  const handleConnectStoreGoogle = async () => {
-    try {
-      setSheetErrorMsg('');
-      const authObj = await googleSignIn();
-      if (authObj) {
-        setCurrentUser(authObj.user);
-        setAccessToken(authObj.accessToken);
-        showTemporarySuccess('Google Workspace Connected successfully!');
-      }
-    } catch (e: any) {
-      setSheetErrorMsg(e?.message || 'Authentication rejected or failed.');
-    }
-  };
-
-  const handleDisconnectGoogle = async () => {
-    await googleSignOut();
-    setCurrentUser(null);
-    setAccessToken('');
-    showTemporarySuccess('Google Workspace disconnected.');
-  };
-
-  const handleSaveSpreadsheetId = (val: string) => {
-    setSpreadsheetId(val);
-    localStorage.setItem('brandier_spreadsheet_id', val);
-  };
-
-  const handleSyncToSheets = async () => {
-    if (!spreadsheetId) {
-      setSheetErrorMsg('Please set a Spreadsheet ID first.');
-      return;
-    }
-    if (leads.length === 0) {
-      setSheetErrorMsg('No leads captured yet to sync.');
-      return;
-    }
-    setSheetStatus('syncing');
-    setSheetErrorMsg('');
-
-    try {
-      const res = await syncLeadsToGoogleSheet(spreadsheetId, leads, accessToken);
-      if (res.success) {
-        setSheetStatus('success');
-        showTemporarySuccess(res.message);
-        setTimeout(() => setSheetStatus('idle'), 4000);
-      } else {
-        setSheetStatus('error');
-        setSheetErrorMsg(res.message);
-      }
-    } catch (err: any) {
-      setSheetStatus('error');
-      setSheetErrorMsg(err.message || 'Unknown syncing failure.');
-    }
-  };
-
   // Editing state
   const [editingItem, setEditingItem] = useState<Partial<MediaItem> | null>(null);
   const [isEditingNew, setIsEditingNew] = useState(false);
 
+  // Safe inline confirmation states (bypasses iframe blocker popups)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [confirmPurgeLeads, setConfirmPurgeLeads] = useState(false);
+
   // Success messages
   const [successMsg, setSuccessMsg] = useState('');
-
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  // Auth password logic
+  // Auth login action
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === 'brandier2026' || password === 'admin') {
+    if (password === 'brandier2026') {
       setIsAuthenticated(true);
       setLoginError('');
     } else {
@@ -148,7 +79,6 @@ export default function AdminPanel({
     }
   };
 
-  // Default key tool generator
   const handleAddNewContentClick = () => {
     const newItem: Partial<MediaItem> = {
       id: `media-${Date.now()}`,
@@ -165,6 +95,9 @@ export default function AdminPanel({
       tools: [],
       duration: '1:00',
       isPremium: false,
+      isSpotlight: false,
+      isComingSoon: false,
+      aspectRatio: '16:9'
     };
     setEditingItem(newItem);
     setIsEditingNew(true);
@@ -178,36 +111,52 @@ export default function AdminPanel({
   };
 
   const handleDeleteClick = (id: string) => {
-    if (window.confirm('Are you absolutely sure you want to delete this content listing?')) {
-      const updated = mediaItems.filter((m) => m.id !== id);
-      onSaveItems(updated);
-      showTemporarySuccess('Content deleted successfully.');
-    }
+    const updated = mediaItems.filter((m) => m.id !== id);
+    onSaveItems(updated);
+    showTemporarySuccess('Content deleted successfully.');
+    setDeleteConfirmId(null);
   };
 
   const showTemporarySuccess = (msg: string) => {
     setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 4000);
+    setTimeout(() => setSuccessMsg(''), 4500);
   };
 
-  // Helper validation before saving
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     if (!editingItem?.title?.trim()) errors.title = 'Title is required';
     if (!editingItem?.description?.trim()) errors.description = 'Description is required';
-    if (!editingItem?.thumbnailUrl?.trim()) {
-      errors.thumbnailUrl = 'Thumbnail URL is required';
-    } else if (!editingItem.thumbnailUrl.startsWith('http://') && !editingItem.thumbnailUrl.startsWith('https://')) {
-      errors.thumbnailUrl = 'Must be a valid web URL';
-    }
-
-    setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSaveForm = (e: React.FormEvent, isDraft: boolean) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    
+    let resolvedThumbnailUrl = editingItem?.thumbnailUrl?.trim() || '';
+    const ytThumbId = getYoutubeId(resolvedThumbnailUrl);
+    
+    if (ytThumbId) {
+      resolvedThumbnailUrl = `https://img.youtube.com/vi/${ytThumbId}/hqdefault.jpg`;
+    } else if (!resolvedThumbnailUrl && editingItem?.videoUrl) {
+      const ytId = getYoutubeId(editingItem.videoUrl);
+      if (ytId) {
+        resolvedThumbnailUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+      }
+    }
+    
+    if (!resolvedThumbnailUrl) {
+      resolvedThumbnailUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop';
+    }
+
+    const errors: Record<string, string> = {};
+    if (!editingItem?.title?.trim()) errors.title = 'Title is required';
+    if (!editingItem?.description?.trim()) errors.description = 'Description is required';
+    if (!resolvedThumbnailUrl.startsWith('http://') && !resolvedThumbnailUrl.startsWith('https://')) {
+      errors.thumbnailUrl = 'Must be a valid web URL';
+    }
+    
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
     const baseSlug = (editingItem?.title || '')
       .toLowerCase()
@@ -221,7 +170,7 @@ export default function AdminPanel({
       title: editingItem!.title || '',
       description: editingItem!.description || '',
       category: editingItem!.category || CATEGORIES[0],
-      thumbnailUrl: editingItem!.thumbnailUrl || '',
+      thumbnailUrl: resolvedThumbnailUrl,
       videoUrl: editingItem!.videoUrl || '',
       instagramUrl: editingItem!.instagramUrl || '',
       linkedinUrl: editingItem!.linkedinUrl || '',
@@ -230,8 +179,11 @@ export default function AdminPanel({
       tools: editingItem!.tools || ['AI'],
       duration: editingItem!.duration || '1:00',
       isPremium: !!editingItem!.isPremium,
+      isSpotlight: !!editingItem!.isSpotlight,
+      isComingSoon: !!editingItem!.isComingSoon,
       slug: baseSlug,
       createdAt: editingItem!.createdAt || new Date().toISOString(),
+      aspectRatio: editingItem!.aspectRatio || '16:9'
     };
 
     let updatedList: MediaItem[];
@@ -244,13 +196,6 @@ export default function AdminPanel({
     onSaveItems(updatedList);
     setEditingItem(null);
     showTemporarySuccess(`Content ${isDraft ? 'saved as Draft' : 'published successfully'}!`);
-  };
-
-  const handleResetDb = () => {
-    if (window.confirm('Reset the catalog back to premium defaults? All additions will be lost.')) {
-      resetMediaToDefault();
-      window.location.reload();
-    }
   };
 
   if (!isAuthenticated) {
@@ -296,21 +241,11 @@ export default function AdminPanel({
 
             <button
               type="submit"
-              className="w-full py-3 bg-black hover:bg-black/90 active:scale-98 text-white font-medium text-sm rounded-xl transition-all cursor-pointer"
+              className="w-full py-3 bg-black hover:bg-black/95 active:scale-98 text-white font-medium text-sm rounded-xl transition-all cursor-pointer"
             >
               Unlock Terminal
             </button>
           </form>
-
-          {/* Quick Sandbox Help indicator */}
-          <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-center">
-            <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
-              Preview Credentials
-            </p>
-            <p className="text-xs text-black font-semibold font-mono mt-1 select-all">
-              brandier2026
-            </p>
-          </div>
         </motion.div>
       </div>
     );
@@ -329,15 +264,6 @@ export default function AdminPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleResetDb}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
-            title="Reset storage to initial values"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Reset Initial Seed
-          </button>
-
           <button
             onClick={handleAddNewContentClick}
             className="px-4 py-2 bg-black hover:bg-black/95 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 cursor-pointer transition-transform duration-300 active:scale-95"
@@ -397,7 +323,7 @@ export default function AdminPanel({
                   placeholder="e.g. Aura of Chronos — Luxury Timepiece UGC Ad"
                   value={editingItem.title || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, title: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:outline-none"
+                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:outline-none focus:border-black"
                 />
                 {formErrors.title && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{formErrors.title}</p>}
               </div>
@@ -411,35 +337,38 @@ export default function AdminPanel({
                   placeholder="Describe your design aesthetics, process..."
                   value={editingItem.description || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, description: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:outline-none resize-none"
+                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:outline-none resize-none focus:border-black"
                 />
                 {formErrors.description && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{formErrors.description}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    Asset Type
+                    Asset Type & Display Tab
                   </label>
                   <select
                     value={editingItem.type || 'video'}
                     onChange={(e) => setEditingItem({ ...editingItem, type: e.target.value as any })}
-                    className="w-full px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black"
+                    className="w-full px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:border-black focus:outline-none"
                   >
-                    <option value="video">Video</option>
-                    <option value="motion">Motion Graphic</option>
-                    <option value="image">AI Image</option>
+                    <option value="video">Video (Shows in Videos Tab & Homepage Spotlight)</option>
+                    <option value="motion">Motion Graphic (Shows in Motion Graphics Tab)</option>
+                    <option value="image">AI Image (Shows in AI Concept Images Tab)</option>
                   </select>
+                  <span className="text-[10px] text-gray-400 mt-1 block leading-normal">
+                    This selection controls which tab/page your content is routed to automatically.
+                  </span>
                 </div>
 
                 <div>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    Category
+                    Category Type
                   </label>
                   <select
                     value={editingItem.category || CATEGORIES[0]}
                     onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black"
+                    className="w-full px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:border-black focus:outline-none"
                   >
                     {CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
@@ -453,28 +382,57 @@ export default function AdminPanel({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    Duration (e.g. 0:30)
+                    Frame Aspect Ratio
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 0:30"
-                    value={editingItem.duration || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, duration: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm"
-                  />
+                  <select
+                    value={editingItem.aspectRatio || '16:9'}
+                    onChange={(e) => setEditingItem({ ...editingItem, aspectRatio: e.target.value as any })}
+                    className="w-full px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-xl text-sm focus:ring-1 focus:ring-black focus:border-black focus:outline-none"
+                  >
+                    <option value="16:9">Horizontal (16:9)</option>
+                    <option value="9:16">Vertical (9:16 Short/Story)</option>
+                  </select>
                 </div>
 
-                <div className="flex items-center gap-2 pt-6 pl-2">
-                  <input
-                    type="checkbox"
-                    id="premium-check"
-                    checked={editingItem.isPremium || false}
-                    onChange={(e) => setEditingItem({ ...editingItem, isPremium: e.target.checked })}
-                    className="w-4 h-4 rounded-sm border-gray-300 text-black focus:ring-black"
-                  />
-                  <label htmlFor="premium-check" className="text-xs font-mono font-bold uppercase tracking-widest text-black cursor-pointer">
-                    Premium Work?
-                  </label>
+                <div className="space-y-3 pt-6 pl-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="premium-check"
+                      checked={editingItem.isPremium || false}
+                      onChange={(e) => setEditingItem({ ...editingItem, isPremium: e.target.checked })}
+                      className="w-4 h-4 rounded-sm border-gray-300 text-black focus:ring-black cursor-pointer"
+                    />
+                    <label htmlFor="premium-check" className="text-[11px] font-mono font-bold uppercase tracking-wider text-black cursor-pointer select-none">
+                      Premium Lock Archive
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="spotlight-check"
+                      checked={editingItem.isSpotlight || false}
+                      onChange={(e) => setEditingItem({ ...editingItem, isSpotlight: e.target.checked })}
+                      className="w-4 h-4 rounded-sm border-gray-300 text-purple-600 focus:ring-purple-600 cursor-pointer"
+                    />
+                    <label htmlFor="spotlight-check" className="text-[11px] font-mono font-bold uppercase tracking-wider text-purple-700 cursor-pointer flex items-center gap-1 select-none animate-pulse">
+                      ⚡ Pin to Hero Spotlight
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="coming-soon-check"
+                      checked={editingItem.isComingSoon || false}
+                      onChange={(e) => setEditingItem({ ...editingItem, isComingSoon: e.target.checked })}
+                      className="w-4 h-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-600 cursor-pointer"
+                    />
+                    <label htmlFor="coming-soon-check" className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-700 cursor-pointer select-none">
+                      ⏳ Mark as Coming Soon
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -490,11 +448,29 @@ export default function AdminPanel({
                   placeholder="https://images.unsplash.com/..."
                   value={editingItem.thumbnailUrl || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, thumbnailUrl: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm"
+                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                 />
+                
+                {editingItem.videoUrl && getYoutubeId(editingItem.videoUrl) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ytId = getYoutubeId(editingItem.videoUrl);
+                      if (ytId) {
+                        setEditingItem({
+                          ...editingItem,
+                          thumbnailUrl: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`
+                        });
+                      }
+                    }}
+                    className="mt-1.5 text-[10px] font-mono font-bold text-purple-600 hover:text-purple-800 transition-colors inline-flex items-center gap-1 uppercase tracking-wider bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-md border border-purple-150 cursor-pointer"
+                  >
+                    ✨ Auto-Fetch YouTube Thumbnail
+                  </button>
+                )}
+                
                 {formErrors.thumbnailUrl && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{formErrors.thumbnailUrl}</p>}
                 
-                {/* Visual mini preview */}
                 {editingItem.thumbnailUrl && editingItem.thumbnailUrl.startsWith('http') && (
                   <div className="mt-2 text-[10px] flex items-center gap-2 text-gray-400">
                     <span className="font-mono">Preview:</span>
@@ -511,14 +487,14 @@ export default function AdminPanel({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    YouTube Video ID
+                    YouTube URL or ID
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. b0uOnd6kPGA"
+                    placeholder="e.g. dQw4w9WgXcQ"
                     value={editingItem.videoUrl || ''}
                     onChange={(e) => setEditingItem({ ...editingItem, videoUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono"
+                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
 
@@ -531,7 +507,7 @@ export default function AdminPanel({
                     placeholder="https://instagram.com/..."
                     value={editingItem.instagramUrl || ''}
                     onChange={(e) => setEditingItem({ ...editingItem, instagramUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm"
+                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
               </div>
@@ -539,14 +515,14 @@ export default function AdminPanel({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    LinkedIn URL
+                    Duration (e.g. 0:30)
                   </label>
                   <input
                     type="text"
-                    placeholder="https://linkedin.com/..."
-                    value={editingItem.linkedinUrl || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, linkedinUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm"
+                    placeholder="0:45"
+                    value={editingItem.duration || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, duration: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
 
@@ -559,7 +535,7 @@ export default function AdminPanel({
                     placeholder="https://tiktok.com/@..."
                     value={editingItem.tiktokUrl || ''}
                     onChange={(e) => setEditingItem({ ...editingItem, tiktokUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono text-center"
+                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono text-center focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
               </div>
@@ -611,7 +587,7 @@ export default function AdminPanel({
                       .filter(Boolean);
                     setEditingItem({ ...editingItem, tags: cleanTags });
                   }}
-                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm"
+                  className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                 />
               </div>
             </div>
@@ -655,7 +631,7 @@ export default function AdminPanel({
               <tr className="border-b border-gray-100 text-[10px] font-mono text-gray-400 uppercase tracking-widest bg-gray-50/40">
                 <th className="py-4 px-6 font-bold">Concept details</th>
                 <th className="py-4 px-4 font-bold">Category</th>
-                <th className="py-4 px-4 font-bold">Type</th>
+                <th className="py-4 px-4 font-bold">Aspect</th>
                 <th className="py-4 px-4 font-bold">Access</th>
                 <th className="py-4 px-6 text-right font-bold w-32">Actions</th>
               </tr>
@@ -686,40 +662,78 @@ export default function AdminPanel({
                     </span>
                   </td>
 
-                  <td className="py-4 px-4 font-mono text-xs text-gray-500 uppercase">
-                    {item.type}
+                  <td className="py-4 px-4 font-mono text-xs text-gray-500">
+                    {item.aspectRatio || '16:9'}
                   </td>
 
                   <td className="py-4 px-4">
-                    {item.isPremium ? (
-                      <span className="font-mono text-[9px] tracking-wider uppercase bg-black text-white px-2 py-0.5 rounded-sm font-semibold">
-                        PREMIUM
-                      </span>
-                    ) : (
-                      <span className="font-mono text-[9px] tracking-wider uppercase bg-gray-100 text-gray-400 px-2 py-0.5 rounded-sm">
-                        FREE
-                      </span>
-                    )}
+                    <div className="space-y-1">
+                      <div>
+                        {item.isPremium ? (
+                          <span className="font-mono text-[9px] tracking-wider uppercase bg-black text-white px-2 py-0.5 rounded-sm font-semibold">
+                            PREMIUM
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[9px] tracking-wider uppercase bg-gray-100 text-gray-400 px-2 py-0.5 rounded-sm">
+                            FREE
+                          </span>
+                        )}
+                      </div>
+                      {item.isSpotlight && (
+                        <div>
+                          <span className="inline-flex items-center gap-0.5 font-mono text-[8.5px] font-bold text-purple-700 bg-purple-50 border border-purple-100 px-1 rounded-sm uppercase tracking-wide">
+                            ⚡ Spotlight
+                          </span>
+                        </div>
+                      )}
+                      {item.isComingSoon && (
+                        <div>
+                          <span className="inline-flex items-center gap-0.5 font-mono text-[8.5px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-1 rounded-sm uppercase tracking-wide">
+                            ⏳ Coming Soon
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </td>
 
                   <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => handleEditClick(item)}
-                        className="p-1.5 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-all cursor-pointer"
-                        title="Edit Asset"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
+                    {deleteConfirmId === item.id ? (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-[10px] text-red-500 font-mono font-bold animate-pulse mr-1">Confirm delete?</span>
+                        <button
+                          onClick={() => handleDeleteClick(item.id)}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-semibold text-[10px] rounded-lg transition-all cursor-pointer"
+                          title="Yes, delete"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-[10px] rounded-lg transition-all cursor-pointer"
+                          title="Cancel"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleEditClick(item)}
+                          className="p-1.5 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-all cursor-pointer"
+                          title="Edit Asset"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
 
-                      <button
-                        onClick={() => handleDeleteClick(item.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                        title="Delete Asset"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                        <button
+                          onClick={() => setDeleteConfirmId(item.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                          title="Delete Asset"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -736,163 +750,129 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* Google Sheets Lead Integration & Captured Leads Directory */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12 pb-12">
-        
-        {/* 1. Google Sheets Integration Panel */}
-        <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-6 shadow-xs space-y-6 flex flex-col justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <h2 className="font-display font-semibold text-xs uppercase tracking-wider text-black flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                Google Sheets Sync
-              </h2>
-              <span className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded-sm tracking-wider ${
-                currentUser ? 'bg-emerald-100 text-emerald-800 animate-pulse' : 'bg-amber-100 text-amber-800'
-              }`}>
-                {currentUser ? 'LIVE' : 'OFFLINE'}
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Export captured user email leads in real-time to your custom Google Spreadsheet seamlessly.
+      {/* Captured Leads Review & Approval Terminal */}
+      <div className="mt-12 bg-white rounded-[24px] border border-[#E5E7EB] p-8 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-6 mb-6">
+          <div className="space-y-1">
+            <h2 className="font-display font-semibold text-lg text-black flex items-center gap-2">
+              <Mail className="w-5 h-5 text-purple-650" />
+              Subscriber Premium Approval Console
+            </h2>
+            <p className="text-xs text-gray-500 font-normal">
+              Manage premium subscriber requests: approve registrations instantly to unlock their access profile.
             </p>
-
-            {!currentUser ? (
-              <button
-                onClick={handleConnectStoreGoogle}
-                className="w-full py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors active:scale-98 shadow-xs"
-              >
-                <Database className="w-4 h-4 text-emerald-400" />
-                Connect Google Account
-              </button>
-            ) : (
-              <div className="space-y-4">
-                <div className="p-3 bg-neutral-50 rounded-xl flex items-center justify-between text-xs font-medium text-black border border-neutral-100">
-                  <div className="flex items-center gap-2">
-                    {currentUser.photoURL && (
-                      <img src={currentUser.photoURL} alt="Google avatar" className="w-6 h-6 rounded-full border border-neutral-200" />
-                    )}
-                    <div>
-                      <p className="font-semibold text-gray-900 leading-none">{currentUser.displayName || 'Authorized Admin'}</p>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">{currentUser.email}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleDisconnectGoogle}
-                    className="px-2.5 py-1 text-[10px] font-mono tracking-wider bg-red-50 text-red-650 hover:bg-red-100 rounded-lg transition-colors font-bold uppercase cursor-pointer"
-                  >
-                    Disconnect
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-[10px] font-mono font-bold text-gray-500 uppercase tracking-widest">
-                    Target Google Spreadsheet ID
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="e.g. 1a2b3c4d5e..."
-                      value={spreadsheetId}
-                      onChange={(e) => handleSaveSpreadsheetId(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-neutral-50 border border-neutral-205 rounded-xl text-xs font-mono text-black placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-purple-600 focus:bg-white"
-                    />
-                  </div>
-                  <p className="text-[10px] text-gray-400 leading-relaxed">
-                    Found in your Google Sheet URL: <code className="bg-neutral-100 px-1 py-0.5 rounded text-neutral-600 font-mono break-all select-all">/spreadsheets/d/<span className="text-purple-600 font-bold">SPREADSHEET_ID</span>/edit</code>
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                  <div className="text-[9px] font-mono text-gray-400 uppercase tracking-widest font-semibold">
-                    Queue: {leads.length} leads pending
-                  </div>
-
-                  <button
-                    onClick={handleSyncToSheets}
-                    disabled={sheetStatus === 'syncing' || !spreadsheetId}
-                    className="px-4 py-2 bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all shadow-xs"
-                  >
-                    {sheetStatus === 'syncing' ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        Syncing...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        Sync to Sheets
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {sheetErrorMsg && (
-                  <div className="p-3 bg-red-50 border border-red-100 text-red-750 text-xs font-medium font-sans rounded-xl leading-normal">
-                    ⚠️ Sync Error: {sheetErrorMsg}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
-
-          <div className="text-[9px] text-gray-400 font-mono tracking-widest text-center mt-3 uppercase">
-            ⚡ Direct Secure API Transfer
-          </div>
+          <span className="font-mono text-xs px-3 py-1 bg-purple-50 text-purple-750 font-bold rounded-full border border-purple-100">
+            {leads.length} Subscribers Registered
+          </span>
         </div>
 
-        {/* 2. List of Captured Lead Emails */}
-        <div className="bg-white rounded-[20px] border border-[#E5E7EB] p-6 shadow-xs flex flex-col justify-between">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <h2 className="font-display font-semibold text-xs uppercase tracking-wider text-black flex items-center gap-2">
-                <Mail className="w-5 h-5 text-purple-600" />
-                Live Leads Register
-              </h2>
-              <span className="font-mono text-xs px-2.5 py-0.5 bg-purple-100 text-purple-800 rounded-sm font-semibold">
-                {leads.length} CAPTURES
-              </span>
-            </div>
-
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Real-time audit log of local email registrations submitted from locked premium sections.
-            </p>
-
-            <div className="max-h-56 overflow-y-auto border border-gray-100 rounded-xl divide-y divide-gray-50 no-scrollbar">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 text-[10px] font-mono text-gray-400 uppercase tracking-widest bg-gray-50/30">
+                <th className="py-3 px-4 font-bold">Subscriber Email</th>
+                <th className="py-3 px-4 font-bold">Registered Date</th>
+                <th className="py-3 px-4 font-bold">Current Status</th>
+                <th className="py-3 px-4 text-right font-bold w-48">Approval Decisive Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
               {leads.map((lead, idx) => (
-                <div key={idx} className="p-3 flex items-center justify-between text-xs hover:bg-neutral-50/50 transition-colors">
-                  <span className="font-medium text-black select-all">{lead.email}</span>
-                  <span className="font-mono text-[9px] text-gray-400">
-                    {new Date(lead.timestamp).toLocaleDateString()} {new Date(lead.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
-                </div>
+                <tr key={idx} className="hover:bg-neutral-50/50 transition-colors">
+                  <td className="py-4 px-4 font-medium text-black select-all">
+                    {lead.email}
+                  </td>
+                  <td className="py-4 px-4 font-mono text-xs text-gray-400">
+                    {new Date(lead.timestamp).toLocaleDateString()} {new Date(lead.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="py-4 px-4">
+                    {lead.status === 'approved' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 font-mono text-[9px] font-bold text-emerald-800 bg-emerald-100 rounded-full">
+                        ACTIVE APPROVED
+                      </span>
+                    ) : lead.status === 'rejected' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 font-mono text-[9px] font-bold text-red-800 bg-red-100 rounded-full">
+                        REJECTED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 font-mono text-[9px] font-bold text-amber-800 bg-amber-100 rounded-full animate-pulse">
+                        PENDING APPROVAL
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {lead.status !== 'approved' && onApproveLead && (
+                        <button
+                          onClick={() => {
+                            onApproveLead(lead.email);
+                            showTemporarySuccess(`Approved premium access for ${lead.email}`);
+                          }}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[10px] rounded-lg cursor-pointer transition-colors"
+                        >
+                          Approve
+                        </button>
+                      )}
+                      {lead.status !== 'rejected' && onRejectLead && (
+                        <button
+                          onClick={() => {
+                            onRejectLead(lead.email);
+                            showTemporarySuccess(`Rejected premium access for ${lead.email}`);
+                          }}
+                          className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-650 font-semibold text-[10px] rounded-lg cursor-pointer transition-colors"
+                        >
+                          Reject
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
 
               {leads.length === 0 && (
-                <div className="py-12 text-center text-gray-400 text-xs">
-                  No email registrations recorded yet.
-                </div>
+                <tr>
+                  <td colSpan={4} className="py-12 text-center text-gray-400 italic">
+                    No subscriber email requests logged currently.
+                  </td>
+                </tr>
               )}
-            </div>
-          </div>
+            </tbody>
+          </table>
+        </div>
 
-          {leads.length > 0 && onClearLeads && (
-            <div className="pt-4 border-t border-gray-100 flex justify-end">
-              <button
-                onClick={() => {
-                  if (window.confirm('Are you absolutely sure you want to purge all locally tracked leads?')) {
+        {leads.length > 0 && onClearLeads && (
+          <div className="mt-6 pt-4 border-t border-gray-100 flex justify-end">
+            {confirmPurgeLeads ? (
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-widest animate-pulse">Are you absolutely sure?</span>
+                <button
+                  onClick={() => {
                     onClearLeads();
-                    showTemporarySuccess('Leads purged.');
-                  }
-                }}
+                    showTemporarySuccess('All leads purged successfully.');
+                    setConfirmPurgeLeads(false);
+                  }}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-mono text-[9px] font-bold tracking-wider uppercase rounded-lg cursor-pointer transition-colors"
+                >
+                  Confirm Purge
+                </button>
+                <button
+                  onClick={() => setConfirmPurgeLeads(false)}
+                  className="px-3 py-1.5 bg-gray-150 hover:bg-gray-200 text-gray-700 font-mono text-[9px] font-bold tracking-wider uppercase rounded-lg cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmPurgeLeads(true)}
                 className="text-[10px] font-mono tracking-widest uppercase font-bold text-red-500 hover:text-red-700 hover:underline cursor-pointer"
               >
-                Clear local register
+                Purge All Registers
               </button>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

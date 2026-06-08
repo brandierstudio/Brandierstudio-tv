@@ -38,14 +38,30 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-// Simple client-side router based on URL hash patterns
-function parseHashRoute() {
-  const hash = window.location.hash || '#/';
+// Simple client-side router supporting both URL hash and direct pathnames
+function parseRoute() {
+  const hash = window.location.hash || '';
+  const pathname = window.location.pathname || '';
+
+  // 1. Check for Hash Routes (Aesthetic single-page support)
   if (hash.startsWith('#/watch/')) {
     const slug = hash.replace('#/watch/', '');
     return { path: '/watch', params: { slug } };
   }
-  return { path: hash.replace('#', '') || '/', params: {} };
+  if (hash.startsWith('#/')) {
+    return { path: hash.replace('#', '') || '/', params: {} };
+  }
+
+  // 2. Check for Direct Pathname Routes (Supports direct URL params in dev frame)
+  if (pathname.startsWith('/watch/')) {
+    const slug = pathname.replace('/watch/', '');
+    return { path: '/watch', params: { slug } };
+  }
+  if (pathname !== '/' && pathname !== '') {
+    return { path: pathname, params: {} };
+  }
+
+  return { path: '/', params: {} };
 }
 
 export default function App() {
@@ -55,8 +71,8 @@ export default function App() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   // Leads & Premium Locker state
-  const [premiumUnlocked, setPremiumUnlocked] = useState<boolean>(() => {
-    return localStorage.getItem('brandier_premium_unlocked') === 'true';
+  const [currentEmail, setCurrentEmail] = useState<string>(() => {
+    return localStorage.getItem('brandier_current_email') || '';
   });
 
   const [leads, setLeads] = useState<Lead[]>(() => {
@@ -67,21 +83,50 @@ export default function App() {
     }
   });
 
+  const checkPremiumUnlock = () => {
+    if (!currentEmail) return false;
+    return leads.some(l => l.email.toLowerCase() === currentEmail.toLowerCase() && l.status === 'approved');
+  };
+
+  const premiumUnlocked = checkPremiumUnlock();
+
   const handleAddLead = (email: string) => {
-    const newLead: Lead = { email, timestamp: new Date().toISOString() };
-    const updated = [newLead, ...leads];
+    const cleanedEmail = email.trim();
+    const existing = leads.find(l => l.email.toLowerCase() === cleanedEmail.toLowerCase());
+    let updated = [...leads];
+    
+    if (!existing) {
+      const newLead: Lead = { 
+        email: cleanedEmail, 
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      };
+      updated = [newLead, ...leads];
+      setLeads(updated);
+      localStorage.setItem('brandier_leads', JSON.stringify(updated));
+    }
+    
+    setCurrentEmail(cleanedEmail);
+    localStorage.setItem('brandier_current_email', cleanedEmail);
+  };
+
+  const handleApproveLead = (email: string) => {
+    const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'approved' as const } : l);
     setLeads(updated);
     localStorage.setItem('brandier_leads', JSON.stringify(updated));
-    localStorage.setItem('brandier_premium_unlocked', 'true');
-    setPremiumUnlocked(true);
-    
-    // Dispatch custom event to notify listening frames or sync immediately
-    window.dispatchEvent(new CustomEvent('brandier_lead_captured', { detail: newLead }));
+  };
+
+  const handleRejectLead = (email: string) => {
+    const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'rejected' as const } : l);
+    setLeads(updated);
+    localStorage.setItem('brandier_leads', JSON.stringify(updated));
   };
 
   const handleClearLeads = () => {
     setLeads([]);
     localStorage.removeItem('brandier_leads');
+    setCurrentEmail('');
+    localStorage.removeItem('brandier_current_email');
   };
 
   // States for general filters
@@ -97,17 +142,20 @@ export default function App() {
   useEffect(() => {
     setMediaItems(getStoredMedia());
 
-    // Router synchronization
-    const handleHashChange = () => {
-      setRoute(parseHashRoute());
+    // Router synchronization (covers both popstate browser navigation and hash changes)
+    const handleRouteSync = () => {
+      setRoute(parseRoute());
     };
 
-    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('hashchange', handleRouteSync);
+    window.addEventListener('popstate', handleRouteSync);
+    
     // Initial load
-    handleHashChange();
+    handleRouteSync();
 
     return () => {
-      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('hashchange', handleRouteSync);
+      window.removeEventListener('popstate', handleRouteSync);
     };
   }, []);
 
@@ -143,7 +191,7 @@ export default function App() {
       );
 
   // Categories helper
-  const featuredVideoAds = mediaItems.filter(m => m.type === 'video' && m.category === 'UGC Ads');
+  const featuredVideoAds = mediaItems.filter(m => m.type === 'video' && m.category === 'AI UGC');
   const latestCreations = [...mediaItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   
   // Specific list collections
@@ -174,6 +222,8 @@ export default function App() {
             premiumUnlocked={premiumUnlocked}
             onSelectMedia={handleSelectMedia}
             onAddLead={handleAddLead}
+            currentEmail={currentEmail}
+            leads={leads}
           />
         );
       case '/about':
@@ -186,6 +236,8 @@ export default function App() {
             onNavigate={(p) => navigateTo(p)} 
             leads={leads}
             onClearLeads={handleClearLeads}
+            onApproveLead={handleApproveLead}
+            onRejectLead={handleRejectLead}
           />
         );
       case '/watch':
@@ -216,12 +268,18 @@ export default function App() {
 
   // --- HOME PAGE TAB ---
   const renderHome = () => {
-    // Dynamic selector for 3 top-tier spotlight campaigns
-    const spotlightItems = mediaItems.filter(m => 
-      ['aura-of-chronos-luxury-timepiece', 'specter-gt-electric-hypercar-launch', 'nouveau-chic-neo-tokyo-fashion'].includes(m.slug)
-    ).slice(0, 3);
+    // Filter spotlight items: prioritize items explicitly pinned to spotlight, fallback to default slugs or first 3 items
+    let spotlightItems = mediaItems.filter(m => m.isSpotlight);
+    if (spotlightItems.length === 0) {
+      spotlightItems = mediaItems.filter(m => 
+        ['aura-of-chronos-luxury-timepiece', 'specter-gt-electric-hypercar-launch', 'nouveau-chic-neo-tokyo-fashion'].includes(m.slug)
+      ).slice(0, 3);
+    }
+    if (spotlightItems.length === 0) {
+      spotlightItems = mediaItems.slice(0, 3);
+    }
     
-    const activeSpotlightList = spotlightItems.length === 3 ? spotlightItems : mediaItems.slice(0, 3);
+    const activeSpotlightList = spotlightItems;
     const featuredItem = activeSpotlightList[heroActiveIndex] || activeSpotlightList[0];
 
     return (
@@ -301,7 +359,7 @@ export default function App() {
               </motion.div>
 
               {/* Spotlight Pagination Controls (Artistic Selector) */}
-              {activeSpotlightList.length > 0 && (
+              {activeSpotlightList.length > 0 ? (
                 <div className="pt-6 border-t border-neutral-100 flex flex-col gap-3">
                   <span className="text-[10px] font-mono tracking-widest text-neutral-400 font-bold uppercase">
                     SPOTLIGHT ARCHIVES
@@ -329,13 +387,22 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+              ) : (
+                <div className="pt-6 border-t border-neutral-100 flex flex-col gap-2">
+                  <span className="text-[10px] font-mono tracking-widest text-[#7C3AED] font-bold uppercase animate-pulse">
+                    ⚡ Spotlight Standby
+                  </span>
+                  <p className="text-xs text-neutral-500 leading-normal font-sans">
+                    All default assets were cleared. Access the Admin Panel to curate your own assets and toggle <strong className="text-black">Pin to Spotlight</strong> to showcase your work here!
+                  </p>
+                </div>
               )}
             </div>
 
             {/* Right Spotlight Showcase container styled elegantly */}
             <div className="col-span-1 lg:col-span-7 relative">
               <AnimatePresence mode="wait">
-                {featuredItem && (
+                {featuredItem ? (
                   <motion.div
                     key={featuredItem.id}
                     initial={{ opacity: 0, scale: 0.98, x: 20 }}
@@ -347,7 +414,7 @@ export default function App() {
                   >
                     {/* Media Thumbnail */}
                     <div className="relative aspect-video w-full overflow-hidden bg-[#FAFAFA]">
-                      {featuredItem && (featuredItem.type === 'video' || featuredItem.type === 'motion') ? (
+                      {featuredItem && featuredItem.isComingSoon ? (
                         <div className="absolute inset-0 bg-linear-to-br from-[#FAFAFA]/70 via-white/50 to-[#F3F4F6]/20 backdrop-blur-xs flex flex-col items-center justify-center p-4">
                           <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px]" />
                           <div className="w-16 h-16 opacity-40 group-hover:opacity-85 group-hover:scale-110 transition-all duration-500 ease-out z-0 text-black">
@@ -357,9 +424,12 @@ export default function App() {
                       ) : (
                         <>
                           <img
-                            src={featuredItem.thumbnailUrl}
+                            src={featuredItem.thumbnailUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'}
                             alt={featuredItem.title}
                             referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop';
+                            }}
                             className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-103"
                           />
                           {/* Overlays */}
@@ -402,27 +472,27 @@ export default function App() {
                         <span className="text-[9px] font-mono tracking-widest text-[#7C3AED]/80 uppercase font-bold">
                           CAMPAIGN FOCUS: {featuredItem.type.toUpperCase()} • ACTIVE FORMULA
                         </span>
-                        {featuredItem.type !== 'video' && featuredItem.type !== 'motion' && featuredItem.duration && (
+                        {!featuredItem.isComingSoon && featuredItem.duration && (
                           <span className="text-[10px] font-mono text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-sm">
                             {featuredItem.duration} MINSEC
                           </span>
                         )}
-                        {(featuredItem.type === 'video' || featuredItem.type === 'motion') && (
+                        {featuredItem.isComingSoon && (
                           <span className="text-[9px] font-mono font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-sm uppercase tracking-wider">
                             In Production
                           </span>
                         )}
                       </div>
                       <h3 className="font-display font-bold text-lg text-black tracking-tight leading-snug group-hover:text-purple-600 transition-colors">
-                        {(featuredItem.type === 'video' || featuredItem.type === 'motion') ? "Coming Soon" : featuredItem.title}
+                        {featuredItem.isComingSoon ? "Coming Soon" : featuredItem.title}
                       </h3>
                       <p className="text-xs text-gray-500 leading-relaxed font-normal line-clamp-2">
-                        {(featuredItem.type === 'video' || featuredItem.type === 'motion') ? "This creative brand-boosting UGC campaign formulation is currently under development. Detailed preview coming soon." : featuredItem.description}
+                        {featuredItem.isComingSoon ? "This creative brand-boosting UGC campaign formulation is currently under development. Detailed preview coming soon." : featuredItem.description}
                       </p>
 
                       <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
                         <div className="flex gap-1.5 overflow-hidden">
-                          {(featuredItem.type === 'video' || featuredItem.type === 'motion') ? (
+                          {featuredItem.isComingSoon ? (
                             <span className="text-[9px] px-2 py-0.5 bg-neutral-50 text-neutral-400 rounded-sm font-semibold uppercase tracking-wider border border-neutral-150">
                               Active Pipeline
                             </span>
@@ -442,6 +512,38 @@ export default function App() {
                         </span>
                       </div>
                     </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="placeholder"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => navigateTo('/admin')}
+                    className="relative bg-[#1A1A1E] border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col p-8 sm:p-12 text-center items-center justify-center min-h-[460px] cursor-pointer group"
+                  >
+                    {/* Futuristic Grid & Ambient light orb element */}
+                    <div className="absolute inset-0 opacity-[0.05] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+                    <div className="absolute -top-16 -right-16 w-64 h-64 bg-purple-600/20 blur-[100px] rounded-full" />
+                    <div className="absolute -bottom-16 -left-16 w-64 h-64 bg-indigo-650/15 blur-[100px] rounded-full animate-pulse" />
+
+                    <div className="w-16 h-16 bg-neutral-800 text-white rounded-2xl border border-neutral-700 flex items-center justify-center shadow-lg mb-6 group-hover:scale-105 transition-transform duration-300">
+                      <BrandierLogo className="w-8 h-8 text-neutral-100" />
+                    </div>
+
+                    <span className="text-[9px] font-mono tracking-widest text-[#7C3AED] font-bold uppercase mb-2 animate-pulse">
+                      ⚡ Creative Studio Standby
+                    </span>
+                    <h3 className="font-display font-medium text-lg sm:text-xl text-white tracking-tight mb-2">
+                       Spotlight Screen Active
+                    </h3>
+                    <p className="text-xs text-neutral-400 max-w-sm leading-relaxed mb-6 font-sans">
+                      All default assets have been cleared. Click inside this workspace or go to the <strong>Admin Panel</strong> to curate and flag new high-end UGC adverts directly for this slide screen.
+                    </p>
+
+                    <span className="flex items-center gap-1.5 px-4 py-2 bg-neutral-800 hover:bg-neutral-750 font-mono text-[10px] font-bold uppercase tracking-wider text-white border border-neutral-700/60 rounded-xl transition-all">
+                      Open Curator Console <ArrowRight className="w-3.5 h-3.5" />
+                    </span>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -565,7 +667,7 @@ export default function App() {
 
   // --- VIDEOS PAGE ---
   const renderVideosPage = () => {
-    const videoCategories = ['All', 'UGC Ads', 'Commercials', 'Fashion', 'Luxury', 'Automotive', 'Product Ads', 'Social Media Ads'];
+    const videoCategories = ['All', 'AI UGC', 'Commercial', 'Unboxing', 'Product Review', 'Tutorials', 'Virtual Try On', 'Pro Try On', 'TV Spot', 'Wild Card'];
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-32 space-y-12 font-sans">
         <div className="space-y-4">
@@ -715,13 +817,13 @@ export default function App() {
         {/* Intro */}
         <div className="space-y-6 text-center max-w-2xl mx-auto">
           <span className="text-[10px] font-mono tracking-widest text-neutral-400 font-bold uppercase block">
-            ABOUT DIRECTORY
+            ABOUT THE PLATFORM
           </span>
           <h1 className="font-display font-medium text-4xl sm:text-6xl text-black tracking-tight leading-none">
             BrandierStudio<span className="font-serif italic font-light text-neutral-500">TV</span>
           </h1>
           <p className="text-gray-500 text-sm sm:text-base leading-relaxed">
-            We operate at the vanguard of cinematic automation. We couple high-end human art direction with state-of-the-art AI generation pipelines.
+            BrandierStudio TV is at the absolute vanguard of Artificial Intelligence Advertising (AI Advertising). We specialize in recreating and remaking any traditional non-AI advertising category into highly immersive, ultra-premium cinematic experiences.
           </p>
         </div>
 
@@ -730,18 +832,18 @@ export default function App() {
           {[
             { 
               step: "01", 
-              title: "Creative Storyboarding", 
-              desc: "Deep human intent conceptualization using textual style pairing and layout rules." 
+              title: "AI UGC Ads", 
+              desc: "Cinematic, high-converting social-first video campaigns featuring photorealistic AI actors and styled products." 
             },
             { 
               step: "02", 
-              title: "Cinematic Synthesis", 
-              desc: "Deploying high-fidelity tools like Midjourney XL, Runway Gen-3, and Sora to render fluid assets." 
+              title: "AI Motion Graphics", 
+              desc: "Visual effects, seamless looping ambient drops, and futuristic concept animations built for modern brand presence." 
             },
             { 
               step: "03", 
-              title: "Premium Post-Production", 
-              desc: "Upscaling using Magnific AI, color grading, and composing custom spatial audio." 
+              title: "Traditional Ad Transformation", 
+              desc: "Automated synthesis to completely remodel traditional advertising media under state-of-the-art computational pipelines." 
             }
           ].map((item, index) => (
             <div key={index} className="space-y-3">
@@ -765,7 +867,7 @@ export default function App() {
               Agency Mission
             </h2>
             <p className="text-sm text-gray-500 leading-relaxed font-normal">
-              Our ultimate objective is transforming product stories through stunning, ultra-premium motion aesthetics. We bypass bulk workflows to focus completely on distinct, memory-inducing cinematic experiences.
+              Our core services are high-converting AI UGC ads and elite AI motion graphics. We also curate other elite media formats designed specifically to be streamed, watched, and enjoyed directly on our digital showcase.
             </p>
           </div>
 
@@ -774,7 +876,7 @@ export default function App() {
               Get In Touch With Curators
             </h3>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-normal">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-normal">
               <a 
                 href="mailto:brandierstudio@gmail.com" 
                 className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-purple-600 hover:bg-[#FAF9FF] transition-all font-medium group"
@@ -790,26 +892,10 @@ export default function App() {
               </a>
 
               <a 
-                href="https://linkedin.com" 
+                href="https://brandierstudio.online" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-4 border border-gray-100 rounded-xl hover:border-purple-600 hover:bg-[#FAF9FF] transition-all font-medium group"
-                id="contact-linkedin-link"
-              >
-                <div className="w-8 h-8 rounded-lg bg-purple-50 group-hover:bg-purple-100 flex items-center justify-center text-[#7C3AED] transition-colors">
-                  <Linkedin className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-gray-400 text-[10px] font-mono font-bold uppercase tracking-wider">Agency Network</p>
-                  <p className="text-black font-semibold group-hover:text-purple-600 transition-colors">Brandier studio</p>
-                </div>
-              </a>
-
-              <a 
-                href="https://anasbinmehboob.github.io/brandier-studio/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-4 border border-purple-100 bg-[#FAF9FF] rounded-xl hover:border-purple-600 hover:bg-purple-50 transition-all font-medium group sm:col-span-1"
+                className="flex items-center gap-3 p-4 border border-purple-100 bg-[#FAF9FF] rounded-xl hover:border-purple-600 hover:bg-purple-50 transition-all font-medium group"
                 id="contact-website-link"
               >
                 <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white">
@@ -817,7 +903,7 @@ export default function App() {
                 </div>
                 <div>
                   <p className="text-purple-500 text-[10px] font-mono font-bold uppercase tracking-wider">Official Site</p>
-                  <p className="text-purple-900 font-bold">brandier-studio</p>
+                  <p className="text-purple-905 font-bold">brandierstudio.online</p>
                 </div>
               </a>
             </div>

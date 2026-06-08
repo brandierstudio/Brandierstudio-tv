@@ -38,8 +38,52 @@ export default function WatchPage({
   const relatedItems = sameTypeRelated.length > 0 ? sameTypeRelated : fallbackRelated;
 
   const isVideo = item.type === 'video' || item.type === 'motion';
-  const isComingSoon = item.type === 'video' || item.type === 'motion';
-  const youtubeVideoId = item.videoUrl || 'dQw4w9WgXcQ'; // Fallback video ID
+  const isComingSoon = !!item.isComingSoon;
+
+  // Extract YouTube/video info
+  const getEmbedInfo = (url: string | undefined) => {
+    if (!url) return { embedUrl: null, isYouTube: false, isDirect: false, videoId: null };
+    const cleanUrl = url.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+      return {
+        embedUrl: `https://www.youtube.com/embed/${cleanUrl}?autoplay=0&rel=0`,
+        isYouTube: true,
+        isDirect: false,
+        videoId: cleanUrl
+      };
+    }
+    const ytMatch = cleanUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    if (ytMatch && ytMatch[1]) {
+      return {
+        embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`,
+        isYouTube: true,
+        isDirect: false,
+        videoId: ytMatch[1]
+      };
+    }
+    const vimeoMatch = cleanUrl.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/i);
+    if (vimeoMatch && vimeoMatch[1]) {
+      return {
+        embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`,
+        isYouTube: false,
+        isDirect: false,
+        videoId: vimeoMatch[1]
+      };
+    }
+    const isDirectVideo = cleanUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
+    if (isDirectVideo) {
+      return {
+        embedUrl: cleanUrl,
+        isYouTube: false,
+        isDirect: true,
+        videoId: null
+      };
+    }
+    return { embedUrl: null, isYouTube: false, isDirect: false, videoId: null };
+  };
+
+  const embedInfo = getEmbedInfo(item.videoUrl);
+  const youtubeVideoId = embedInfo.videoId || 'dQw4w9WgXcQ';
 
   return (
     <div ref={topRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 font-sans">
@@ -81,18 +125,49 @@ export default function WatchPage({
               </div>
             </div>
           ) : (
-            /* Elegant Image Showcase Stage with Watermark */
-            <div className="relative aspect-video w-full rounded-[24px] overflow-hidden bg-gray-50 border border-brand-border shadow-xl flex items-center justify-center">
-              <img
-                src={item.thumbnailUrl}
-                alt={item.title}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-contain bg-white"
-              />
-              <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+            /* Elegant Showcase Stage: either direct Video Player/Iframe OR Thumbnail Image Showcase */
+            <div className="relative aspect-video w-full rounded-[24px] overflow-hidden bg-black border border-brand-border shadow-2xl flex items-center justify-center">
+              {isVideo && embedInfo.embedUrl ? (
+                embedInfo.isDirect ? (
+                  <video 
+                    src={embedInfo.embedUrl} 
+                    controls 
+                    className="w-full h-full object-contain rounded-[24px]"
+                    poster={item.thumbnailUrl}
+                  />
+                ) : (
+                  <iframe
+                    src={embedInfo.embedUrl}
+                    title={item.title}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="w-full h-full rounded-[24px]"
+                  />
+                )
+              ) : (
+                <>
+                  <img
+                    src={item.thumbnailUrl}
+                    alt={item.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain bg-neutral-900"
+                  />
+                  <div className="absolute inset-0 bg-linear-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
+                  
+                  {/* Floating play prompt if video type but no direct embed */}
+                  {isVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-full bg-white/95 text-black flex items-center justify-center shadow-2xl">
+                        <BrandierLogo className="w-8 h-8 text-black animate-pulse" />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* Watermark overlay */}
-              <div className="absolute bottom-6 right-6 select-none pointer-events-none watermark-overlay flex items-center gap-1.5 px-3 py-1.5 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md">
+              <div className="absolute bottom-6 right-6 select-none pointer-events-none watermark-overlay flex items-center gap-1.5 px-3 py-1.5 bg-black/60 border border-white/10 rounded-xl backdrop-blur-md z-10">
                 <BrandierLogo className="w-4 h-4 text-white" />
                 <span className="font-display font-bold text-xs text-white/95 tracking-widest uppercase">
                   BrandierStudio<span className="font-mono text-xs font-normal">TV</span>

@@ -20,8 +20,11 @@ export interface MediaItem {
   tools: string[];
   duration?: string; // e.g. "0:45", "1:12"
   isPremium?: boolean;
+  isSpotlight?: boolean;
+  isComingSoon?: boolean;
   slug: string;
   createdAt: string;
+  aspectRatio?: '16:9' | '9:16';
 }
 
 export type CategoryType = 
@@ -46,5 +49,6 @@ export interface FilterOptions {
 export interface Lead {
   email: string;
   timestamp: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 

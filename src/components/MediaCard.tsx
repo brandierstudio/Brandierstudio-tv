@@ -24,7 +24,7 @@ export default function MediaCard({
   const isVideo = item.type === 'video';
   const isMotion = item.type === 'motion';
   const isImage = item.type === 'image';
-  const isComingSoon = isVideo || isMotion;
+  const isComingSoon = !!item.isComingSoon;
 
   return (
     <motion.div
@@ -49,9 +49,12 @@ export default function MediaCard({
         ) : (
           <>
             <img
-              src={item.thumbnailUrl}
+              src={item.thumbnailUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop'}
               alt={item.title}
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop';
+              }}
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
             {/* Shadow overlays */}
