@@ -17,6 +17,7 @@ import WatchPage from './components/WatchPage';
 import AdminPanel from './components/AdminPanel';
 import PremiumPage from './components/PremiumPage';
 import BrandierLogo from './components/BrandierLogo';
+import { getResolvedThumbnail } from './utils/videoUtils';
 import { 
   Sparkles, 
   Play, 
@@ -424,11 +425,11 @@ export default function App() {
                       ) : (
                         <>
                           <img
-                            src={featuredItem.thumbnailUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop'}
+                            src={getResolvedThumbnail(featuredItem.thumbnailUrl, featuredItem.videoUrl, featuredItem.title, featuredItem.category)}
                             alt={featuredItem.title}
                             referrerPolicy="no-referrer"
                             onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1200&auto=format&fit=crop';
+                              (e.target as HTMLImageElement).src = getResolvedThumbnail(undefined, featuredItem.videoUrl, featuredItem.title, featuredItem.category);
                             }}
                             className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-103"
                           />

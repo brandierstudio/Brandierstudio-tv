@@ -22,16 +22,7 @@ import {
 import { motion } from 'motion/react';
 import { MediaItem, Lead } from '../types';
 import { CATEGORIES, TOOLS } from '../db/mockDb';
-
-const getYoutubeId = (url: string | undefined): string | null => {
-  if (!url) return null;
-  const cleanUrl = url.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
-    return cleanUrl;
-  }
-  const ytMatch = cleanUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-  return (ytMatch && ytMatch[1]) ? ytMatch[1] : null;
-};
+import { getYoutubeId, getResolvedThumbnail } from '../utils/videoUtils';
 
 interface AdminPanelProps {
   mediaItems: MediaItem[];
@@ -132,26 +123,17 @@ export default function AdminPanel({
   const handleSaveForm = (e: React.FormEvent, isDraft: boolean) => {
     e.preventDefault();
     
-    let resolvedThumbnailUrl = editingItem?.thumbnailUrl?.trim() || '';
-    const ytThumbId = getYoutubeId(resolvedThumbnailUrl);
-    
-    if (ytThumbId) {
-      resolvedThumbnailUrl = `https://img.youtube.com/vi/${ytThumbId}/hqdefault.jpg`;
-    } else if (!resolvedThumbnailUrl && editingItem?.videoUrl) {
-      const ytId = getYoutubeId(editingItem.videoUrl);
-      if (ytId) {
-        resolvedThumbnailUrl = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
-      }
-    }
-    
-    if (!resolvedThumbnailUrl) {
-      resolvedThumbnailUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop';
-    }
+    const resolvedThumbnailUrl = getResolvedThumbnail(
+      editingItem?.thumbnailUrl,
+      editingItem?.videoUrl,
+      editingItem?.title || 'Video Preview',
+      editingItem?.category || 'Creative'
+    );
 
     const errors: Record<string, string> = {};
     if (!editingItem?.title?.trim()) errors.title = 'Title is required';
     if (!editingItem?.description?.trim()) errors.description = 'Description is required';
-    if (!resolvedThumbnailUrl.startsWith('http://') && !resolvedThumbnailUrl.startsWith('https://')) {
+    if (!resolvedThumbnailUrl.startsWith('http://') && !resolvedThumbnailUrl.startsWith('https://') && !resolvedThumbnailUrl.startsWith('data:image/')) {
       errors.thumbnailUrl = 'Must be a valid web URL';
     }
     
@@ -441,11 +423,11 @@ export default function AdminPanel({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                  Thumbnail Image URL (Unsplash or any URL)
+                  Thumbnail URL (Or YouTube link / ID / leave blank to auto-fetch)
                 </label>
                 <input
                   type="text"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="Paste URL, YouTube link, or leave empty"
                   value={editingItem.thumbnailUrl || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, thumbnailUrl: e.target.value })}
                   className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
@@ -471,17 +453,15 @@ export default function AdminPanel({
                 
                 {formErrors.thumbnailUrl && <p className="text-[10px] text-red-500 font-bold mt-1 uppercase">{formErrors.thumbnailUrl}</p>}
                 
-                {editingItem.thumbnailUrl && editingItem.thumbnailUrl.startsWith('http') && (
-                  <div className="mt-2 text-[10px] flex items-center gap-2 text-gray-400">
-                    <span className="font-mono">Preview:</span>
-                    <img
-                      src={editingItem.thumbnailUrl}
-                      alt="Thumbnail mini preview"
-                      referrerPolicy="no-referrer"
-                      className="w-12 h-8 rounded-sm object-cover border border-gray-200"
-                    />
-                  </div>
-                )}
+                <div className="mt-2 text-[10px] flex items-center gap-2 text-gray-400">
+                  <span className="font-mono">Live Preview (Never Unsplash):</span>
+                  <img
+                    src={getResolvedThumbnail(editingItem.thumbnailUrl, editingItem.videoUrl, editingItem.title, editingItem.category)}
+                    alt="Thumbnail mini preview"
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-10 rounded-md object-cover border border-gray-200 bg-gray-50"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

@@ -9,6 +9,7 @@ import { motion } from 'motion/react';
 import { MediaItem } from '../types';
 import MediaCard from './MediaCard';
 import BrandierLogo from './BrandierLogo';
+import { getYoutubeId, getVimeoId } from '../utils/videoUtils';
 
 interface WatchPageProps {
   item: MediaItem;
@@ -44,32 +45,27 @@ export default function WatchPage({
   const getEmbedInfo = (url: string | undefined) => {
     if (!url) return { embedUrl: null, isYouTube: false, isDirect: false, videoId: null };
     const cleanUrl = url.trim();
-    if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
-      return {
-        embedUrl: `https://www.youtube.com/embed/${cleanUrl}?autoplay=0&rel=0`,
-        isYouTube: true,
-        isDirect: false,
-        videoId: cleanUrl
-      };
+    
+    const ytId = getYoutubeId(cleanUrl);
+    if (ytId) {
+       return {
+         embedUrl: `https://www.youtube.com/embed/${ytId}?autoplay=1&rel=0`,
+         isYouTube: true,
+         isDirect: false,
+         videoId: ytId
+       };
     }
-    const ytMatch = cleanUrl.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
-    if (ytMatch && ytMatch[1]) {
+    
+    const vimeoId = getVimeoId(cleanUrl);
+    if (vimeoId) {
       return {
-        embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&rel=0`,
-        isYouTube: true,
-        isDirect: false,
-        videoId: ytMatch[1]
-      };
-    }
-    const vimeoMatch = cleanUrl.match(/(?:vimeo\.com\/|player\.vimeo\.com\/video\/)([0-9]+)/i);
-    if (vimeoMatch && vimeoMatch[1]) {
-      return {
-        embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1`,
+        embedUrl: `https://player.vimeo.com/video/${vimeoId}?autoplay=1`,
         isYouTube: false,
         isDirect: false,
-        videoId: vimeoMatch[1]
+        videoId: vimeoId
       };
     }
+    
     const isDirectVideo = cleanUrl.match(/\.(mp4|webm|ogg|mov)(\?.*)?$/i);
     if (isDirectVideo) {
       return {

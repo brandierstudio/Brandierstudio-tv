@@ -8,6 +8,7 @@ import { Play, Sparkles, Image, Film, Clock, ArrowUpRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MediaItem } from '../types';
 import BrandierLogo from './BrandierLogo';
+import { getResolvedThumbnail } from '../utils/videoUtils';
 
 interface MediaCardProps {
   item: MediaItem;
@@ -49,11 +50,11 @@ export default function MediaCard({
         ) : (
           <>
             <img
-              src={item.thumbnailUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop'}
+              src={getResolvedThumbnail(item.thumbnailUrl, item.videoUrl, item.title, item.category)}
               alt={item.title}
               referrerPolicy="no-referrer"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop';
+                (e.target as HTMLImageElement).src = getResolvedThumbnail(undefined, item.videoUrl, item.title, item.category);
               }}
               className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
