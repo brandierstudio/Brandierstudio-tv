@@ -91,6 +91,20 @@ export default function App() {
 
   const premiumUnlocked = checkPremiumUnlock();
 
+  const syncLeadsToServer = async (updatedLeads: Lead[]) => {
+    try {
+      await fetch('/api/leads', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedLeads),
+      });
+    } catch (err) {
+      console.error('Failed to sync leads to server:', err);
+    }
+  };
+
   const handleAddLead = (email: string) => {
     const cleanedEmail = email.trim();
     const existing = leads.find(l => l.email.toLowerCase() === cleanedEmail.toLowerCase());
@@ -105,6 +119,7 @@ export default function App() {
       updated = [newLead, ...leads];
       setLeads(updated);
       localStorage.setItem('brandier_leads', JSON.stringify(updated));
+      syncLeadsToServer(updated);
     }
     
     setCurrentEmail(cleanedEmail);
@@ -115,12 +130,14 @@ export default function App() {
     const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'approved' as const } : l);
     setLeads(updated);
     localStorage.setItem('brandier_leads', JSON.stringify(updated));
+    syncLeadsToServer(updated);
   };
 
   const handleRejectLead = (email: string) => {
     const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'rejected' as const } : l);
     setLeads(updated);
     localStorage.setItem('brandier_leads', JSON.stringify(updated));
+    syncLeadsToServer(updated);
   };
 
   const handleClearLeads = () => {
@@ -128,6 +145,7 @@ export default function App() {
     localStorage.removeItem('brandier_leads');
     setCurrentEmail('');
     localStorage.removeItem('brandier_current_email');
+    syncLeadsToServer([]);
   };
 
   // States for general filters
@@ -139,9 +157,58 @@ export default function App() {
   // State for interactive hero project spotlight
   const [heroActiveIndex, setHeroActiveIndex] = useState(0);
 
-  // Load items on mount
+  // Load items on mount and maintain a real-time sync loop
   useEffect(() => {
-    setMediaItems(getStoredMedia());
+    // 1. Initial quick load from localStorage fallback
+    const localItems = getStoredMedia();
+    setMediaItems(localItems);
+
+    // 2. Load master copy of media from Express cloud server
+    const fetchMedia = () => {
+      fetch('/api/media')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Server returned non-200 status');
+        })
+        .then((serverItems: MediaItem[]) => {
+          if (serverItems && Array.isArray(serverItems) && serverItems.length > 0) {
+            setMediaItems(serverItems);
+            saveStoredMedia(serverItems);
+          }
+        })
+        .catch(err => {
+          console.warn('Fallback to local items; could not load from master server:', err);
+        });
+    };
+
+    // 3. Load master copy of subscriber leads from Express cloud server
+    const fetchLeads = () => {
+      fetch('/api/leads')
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Server returned non-200 status');
+        })
+        .then((serverLeads: Lead[]) => {
+          if (serverLeads && Array.isArray(serverLeads)) {
+            setLeads(serverLeads);
+            localStorage.setItem('brandier_leads', JSON.stringify(serverLeads));
+          }
+        })
+        .catch(err => {
+          console.warn('Could not load leads from master server:', err);
+        });
+    };
+
+    // Perform initial fetches
+    fetchMedia();
+    fetchLeads();
+
+    // Setup an passive background synchronization interval (every 3.5 seconds)
+    // This connects administrators and viewers seamlessly so status approvals sync live!
+    const syncInterval = setInterval(() => {
+      fetchMedia();
+      fetchLeads();
+    }, 3500);
 
     // Router synchronization (covers both popstate browser navigation and hash changes)
     const handleRouteSync = () => {
@@ -155,6 +222,7 @@ export default function App() {
     handleRouteSync();
 
     return () => {
+      clearInterval(syncInterval);
       window.removeEventListener('hashchange', handleRouteSync);
       window.removeEventListener('popstate', handleRouteSync);
     };
@@ -169,9 +237,23 @@ export default function App() {
     }
   };
 
-  const handleSaveItems = (updated: MediaItem[]) => {
+  const handleSaveItems = async (updated: MediaItem[]) => {
+    // Instantly update UI and client cache
     setMediaItems(updated);
     saveStoredMedia(updated);
+    
+    // Persist securely on backend disk/database
+    try {
+      await fetch('/api/media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updated),
+      });
+    } catch (err) {
+      console.error('Failed to sync saved media to server:', err);
+    }
   };
 
   const handleSelectMedia = (item: MediaItem) => {

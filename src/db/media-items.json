@@ -1,0 +1,50 @@
+[
+  {
+    "id": "item-1",
+    "type": "video",
+    "title": "AI UGC trailer for fashion cosmetic brand",
+    "description": "a simple idea is to make an aesthetic testimonial of a product. So here it is an idea.",
+    "category": "AI UGC",
+    "thumbnailUrl": "https://img.youtube.com/vi/TouX02-NGhY/hqdefault.jpg",
+    "videoUrl": "https://youtube.com/shorts/TouX02-NGhY?feature=share",
+    "tags": ["Cosmetic", "Fashion", "AI Video"],
+    "tools": ["Runway Gen-3", "Midjourney v6"],
+    "duration": "1:00",
+    "isSpotlight": true,
+    "slug": "ai-ugc-trailer-fashion-cosmetic",
+    "createdAt": "2026-06-08T12:00:00.000Z",
+    "aspectRatio": "9:16"
+  },
+  {
+    "id": "item-2",
+    "type": "video",
+    "title": "frendh brand app promo",
+    "description": "testemonial + UGC. All doen with ai,",
+    "category": "AI UGC",
+    "thumbnailUrl": "",
+    "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "tags": ["French", "Promo", "UGC"],
+    "tools": ["Luma Dream Machine", "ElevenLabs"],
+    "duration": "0:18",
+    "isSpotlight": true,
+    "slug": "french-brand-app-promo",
+    "createdAt": "2026-06-08T11:00:00.000Z",
+    "aspectRatio": "16:9"
+  },
+  {
+    "id": "item-3",
+    "type": "video",
+    "title": "real brand fashion story",
+    "description": "Cinematic visual design. Elevating brands through state-of-the-art AI content creation workflow.",
+    "category": "AI UGC",
+    "thumbnailUrl": "",
+    "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "tags": ["Aesthetic", "Fashion", "Commercial"],
+    "tools": ["Sora AI", "After Effects"],
+    "duration": "0:45",
+    "isSpotlight": true,
+    "slug": "real-brand-fashion-story",
+    "createdAt": "2026-06-08T10:00:00.000Z",
+    "aspectRatio": "16:9"
+  }
+]

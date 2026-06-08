@@ -4,8 +4,9 @@
  */
 
 import { MediaItem } from '../types';
+import defaultItems from './media-items.json';
 
-export const DEFAULT_MEDIA_ITEMS: MediaItem[] = [];
+export const DEFAULT_MEDIA_ITEMS: MediaItem[] = defaultItems as MediaItem[];
 
 export const CATEGORIES: string[] = [
   'AI UGC',
