@@ -60,11 +60,12 @@ export const getResolvedThumbnail = (
     return `https://vumbnail.com/${vimeoThumbId}.jpg`;
   }
   
-  // 3. If thumbnail is a valid direct image URL, return it
+  // 3. If thumbnail is a valid direct image URL or relative uploaded path, return it
   if (cleanThumb && (
     cleanThumb.startsWith('http://') || 
     cleanThumb.startsWith('https://') || 
-    cleanThumb.startsWith('data:image/')
+    cleanThumb.startsWith('data:image/') ||
+    cleanThumb.startsWith('/')
   ) && !cleanThumb.includes('youtube.com') && !cleanThumb.includes('youtu.be') && !cleanThumb.includes('vimeo.com')) {
     return cleanThumb;
   }

@@ -17,7 +17,9 @@ import {
   CheckSquare,
   X,
   FileVideo,
-  Monitor
+  Monitor,
+  Sparkles,
+  Image
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MediaItem, Lead } from '../types';
@@ -58,6 +60,54 @@ export default function AdminPanel({
   // Success messages
   const [successMsg, setSuccessMsg] = useState('');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [uploadingField, setUploadingField] = useState<'thumbnail' | 'video' | null>(null);
+
+  const handleLocalUploadFile = async (e: React.ChangeEvent<HTMLInputElement>, field: 'thumbnail' | 'video') => {
+    const file = e.target.files?.[0];
+    if (!file || !editingItem) return;
+    
+    setUploadingField(field);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              base64Data: base64Data,
+            }),
+          });
+          
+          if (!res.ok) throw new Error('Upload server returned non-200');
+          const data = await res.json();
+          if (data.url) {
+            if (field === 'thumbnail') {
+              setEditingItem({ ...editingItem, thumbnailUrl: data.url });
+            } else {
+              setEditingItem({ ...editingItem, videoUrl: data.url });
+            }
+            showTemporarySuccess(`Uploaded ${file.name} successfully!`);
+          }
+        } catch (err) {
+          console.error("Upload error:", err);
+          const errors = { ...formErrors };
+          errors[field] = "Upload failed. Please try again.";
+          setFormErrors(errors);
+        } finally {
+          setUploadingField(null);
+        }
+      };
+    } catch (err) {
+      console.error(err);
+      setUploadingField(null);
+    }
+  };
 
   // Auth login action
   const handleLogin = (e: React.FormEvent) => {
@@ -133,8 +183,13 @@ export default function AdminPanel({
     const errors: Record<string, string> = {};
     if (!editingItem?.title?.trim()) errors.title = 'Title is required';
     if (!editingItem?.description?.trim()) errors.description = 'Description is required';
-    if (!resolvedThumbnailUrl.startsWith('http://') && !resolvedThumbnailUrl.startsWith('https://') && !resolvedThumbnailUrl.startsWith('data:image/')) {
-      errors.thumbnailUrl = 'Must be a valid web URL';
+    if (
+      !resolvedThumbnailUrl.startsWith('http://') && 
+      !resolvedThumbnailUrl.startsWith('https://') && 
+      !resolvedThumbnailUrl.startsWith('data:image/') &&
+      !resolvedThumbnailUrl.startsWith('/')
+    ) {
+      errors.thumbnailUrl = 'Must be a valid web URL or local uploaded file';
     }
     
     setFormErrors(errors);
@@ -423,17 +478,45 @@ export default function AdminPanel({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                  Thumbnail URL (Or YouTube link / ID / leave blank to auto-fetch)
+                  {editingItem.type === 'image' 
+                    ? 'Design Showcase Image URL (Main High-Res Image)' 
+                    : 'Thumbnail URL (Or custom uploaded image path / leave blank)'}
                 </label>
                 <input
                   type="text"
-                  placeholder="Paste URL, YouTube link, or leave empty"
+                  placeholder={editingItem.type === 'image'
+                    ? 'Paste high-res image URL, or click upload below'
+                    : 'Paste URL, YouTube link, or leave empty'}
                   value={editingItem.thumbnailUrl || ''}
                   onChange={(e) => setEditingItem({ ...editingItem, thumbnailUrl: e.target.value })}
                   className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
                 />
+
+                {/* Direct file upload for custom cover or master image */}
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <label className="relative inline-flex items-center justify-center px-4 py-2 bg-neutral-900 hover:bg-black text-white text-[11px] font-mono font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none" id="device-upload-btn">
+                      <span>{uploadingField === 'thumbnail' ? 'Uploading...' : (editingItem.type === 'image' ? '🖼️ Upload Concept Image from Device' : '📁 Upload Thumbnail from Device')}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={uploadingField !== null}
+                        onChange={(e) => handleLocalUploadFile(e, 'thumbnail')}
+                        className="sr-only"
+                      />
+                    </label>
+                    {uploadingField === 'thumbnail' && (
+                      <span className="text-[10px] text-gray-500 font-mono animate-pulse">Uploading asset...</span>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-1 leading-normal">
+                    {editingItem.type === 'image'
+                      ? 'Select your high-resolution PNG or JPG to upload as the main concept art instantly!'
+                      : 'Direct local file upload instantly. No Dropbox or Google Drive needed!'}
+                  </p>
+                </div>
                 
-                {editingItem.videoUrl && getYoutubeId(editingItem.videoUrl) && (
+                {editingItem.type !== 'image' && editingItem.videoUrl && getYoutubeId(editingItem.videoUrl) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -465,20 +548,53 @@ export default function AdminPanel({
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
-                    YouTube URL or ID
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. dQw4w9WgXcQ"
-                    value={editingItem.videoUrl || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, videoUrl: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
-                  />
-                </div>
+                {editingItem.type === 'image' ? (
+                  <div className="col-span-2 bg-purple-50 border border-purple-100 rounded-xl p-4 text-xs font-sans">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
+                      <span className="font-bold text-purple-900 uppercase tracking-wide">Image Presentation Mode Active</span>
+                    </div>
+                    <p className="text-purple-700 leading-normal font-normal text-[11px]">
+                      Since you selected <strong className="text-purple-900 font-semibold">AI Image</strong> as your asset type, there is no video compilation required.
+                      Simply upload your high-resolution artwork above; it will render beautifully inside both the feed list and the core presentation pages!
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
+                      Media URL / Uploaded Video
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. YouTube ID or relative path /uploads/..."
+                      value={editingItem.videoUrl || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, videoUrl: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-xl text-sm font-mono focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+                    />
 
-                <div>
+                    {/* Direct video uploading option */}
+                    <div className="mt-2 text-left">
+                      <label className="relative inline-flex items-center justify-center px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 text-neutral-800 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer select-none">
+                        <span>{uploadingField === 'video' ? 'Uploading...' : '📁 Upload Local Video File'}</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          disabled={uploadingField !== null}
+                          onChange={(e) => handleLocalUploadFile(e, 'video')}
+                          className="sr-only"
+                        />
+                      </label>
+                      {uploadingField === 'video' && (
+                        <p className="text-[9px] text-purple-600 font-mono mt-1 animate-pulse">Slicing & Uploading video stream...</p>
+                      )}
+                      <p className="text-[9px] text-gray-400 mt-1 leading-normal font-sans">
+                        Select MP4 or MOV to stream directly!
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className={editingItem.type === 'image' ? "col-span-2" : "col-span-1"}>
                   <label className="block text-xs font-mono font-bold text-gray-500 uppercase tracking-widest mb-1">
                     Instagram URL
                   </label>
