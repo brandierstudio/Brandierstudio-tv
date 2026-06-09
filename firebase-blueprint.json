@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "An AI-generated showcase asset (video or image) curated by administrators.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the media item"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["video", "image"],
+          "description": "The format type of the asset"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the creative asset"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed aesthetic description"
+        },
+        "category": {
+          "type": "string",
+          "description": "Asset category"
+        },
+        "thumbnailUrl": {
+          "type": "string",
+          "description": "URL to the high-quality master thumbnail"
+        },
+        "videoUrl": {
+          "type": "string",
+          "description": "Streaming video resource URL or YouTube ID"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Searchable tags"
+        },
+        "tools": {
+          "type": "array",
+          "description": "AI generator tool stack"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Estimated playback length of the asset"
+        },
+        "isSpotlight": {
+          "type": "boolean",
+          "description": "Whether this item is featured in the spotlight gallery"
+        },
+        "isComingSoon": {
+          "type": "boolean",
+          "description": "Whether this item is marked as coming soon"
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL slug parsed from title for page routing"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp in ISO-8601"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "description": "Frame aspect ratio e.g. 16:9 or 9:16"
+        },
+        "instagramUrl": {
+          "type": "string",
+          "description": "Social media link to Instagram upload"
+        },
+        "tiktokUrl": {
+          "type": "string",
+          "description": "Social media link to TikTok upload"
+        }
+      },
+      "required": ["id", "type", "title", "description", "category", "slug"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "A subscriber newsletter or consultation lead generation request.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique auto-generated key"
+        },
+        "email": {
+          "type": "string",
+          "description": "Validated user email address"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Pending", "Approved", "Rejected"],
+          "description": "Verification status of the subscriber"
+        },
+        "subscribedAt": {
+          "type": "string",
+          "description": "Subscription timestamp in ISO-8601"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User's full name if provided"
+        }
+      },
+      "required": ["id", "email", "status", "subscribedAt"]
+    }
+  },
+  "firestore": {
+    "/media_items/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Dynamic library containing all public AI motion graphics and design concepts."
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Registered subscriber records managed securely via the Administrator console."
+    }
+  }
+}

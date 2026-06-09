@@ -2,6 +2,108 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://fctalnchvojgqhkezope.supabase.co";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "sb_publishable_wijjU8m2n4D5jYbmoTrNgA_zYemfvii";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Interface structures
+interface MediaItem {
+  id: string;
+  type: 'video' | 'motion' | 'image';
+  title: string;
+  description: string;
+  category: string;
+  thumbnailUrl: string;
+  videoUrl?: string;
+  instagramUrl?: string;
+  linkedinUrl?: string;
+  tiktokUrl?: string;
+  tags: string[];
+  tools: string[];
+  duration?: string;
+  isPremium?: boolean;
+  isSpotlight?: boolean;
+  isComingSoon?: boolean;
+  slug: string;
+  createdAt: string;
+  aspectRatio?: string;
+}
+
+interface Lead {
+  email: string;
+  timestamp: string;
+  status: 'pending' | 'approved' | 'rejected';
+}
+
+// Resilient Bidirectional Translators
+function mapRowToMediaItem(row: any): MediaItem {
+  const tagsParsed = Array.isArray(row.tags) 
+    ? row.tags 
+    : (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags || []);
+  const toolsParsed = Array.isArray(row.tools) 
+    ? row.tools 
+    : (typeof row.tools === 'string' ? JSON.parse(row.tools) : row.tools || []);
+
+  return {
+    id: row.id,
+    type: row.type || 'video',
+    title: row.title || '',
+    description: row.description || '',
+    category: row.category || '',
+    thumbnailUrl: row.thumbnailUrl || row.thumbnail_url || row.thumbnailurl || '',
+    videoUrl: row.videoUrl || row.video_url || row.videourl || '',
+    instagramUrl: row.instagramUrl || row.instagram_url || row.instagramurl || '',
+    linkedinUrl: row.linkedinUrl || row.linkedin_url || row.linkedinurl || '',
+    tiktokUrl: row.tiktokUrl || row.tiktok_url || row.tiktokurl || '',
+    tags: Array.isArray(tagsParsed) ? tagsParsed : [],
+    tools: Array.isArray(toolsParsed) ? toolsParsed : [],
+    duration: row.duration || '',
+    isPremium: row.isPremium !== undefined ? row.isPremium : (row.is_premium !== undefined ? row.is_premium : (row.ispremium !== undefined ? row.ispremium : false)),
+    isSpotlight: row.isSpotlight !== undefined ? row.isSpotlight : (row.is_spotlight !== undefined ? row.is_spotlight : (row.isspotlight !== undefined ? row.isspotlight : false)),
+    isComingSoon: row.isComingSoon !== undefined ? row.isComingSoon : (row.is_coming_soon !== undefined ? row.is_coming_soon : (row.iscomingsoon !== undefined ? row.iscomingsoon : false)),
+    slug: row.slug || '',
+    createdAt: row.createdAt || row.created_at || row.createdat || new Date().toISOString(),
+    aspectRatio: row.aspectRatio || row.aspect_ratio || row.aspectratio || '16:9',
+  };
+}
+
+function mapMediaItemToRow(item: MediaItem) {
+  return {
+    id: item.id,
+    type: item.type || 'video',
+    title: item.title || '',
+    description: item.description || '',
+    category: item.category || '',
+    thumbnail_url: item.thumbnailUrl || '',
+    video_url: item.videoUrl || '',
+    instagram_url: item.instagramUrl || '',
+    linkedin_url: item.linkedinUrl || '',
+    tiktok_url: item.tiktokUrl || '',
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    tools: Array.isArray(item.tools) ? item.tools : [],
+    duration: item.duration || '',
+    is_premium: !!item.isPremium,
+    is_spotlight: !!item.isSpotlight,
+    is_coming_soon: !!item.isComingSoon,
+    slug: item.slug || '',
+    created_at: item.createdAt || new Date().toISOString(),
+    aspect_ratio: item.aspectRatio || '16:9',
+  };
+}
+
+function mapRowToLead(row: any): Lead {
+  return {
+    email: row.email,
+    timestamp: row.timestamp || row.created_at || row.createdat || new Date().toISOString(),
+    status: (row.status || 'pending').toLowerCase() as 'pending' | 'approved' | 'rejected',
+  };
+}
 
 async function startServer() {
   const app = express();
@@ -94,48 +196,89 @@ async function startServer() {
   // Run on startup
   ensureMediaSchema();
 
-  // API Route to read media items - enhanced with robust on-the-fly seed fallback
-  app.get("/api/media", (req, res) => {
+  // API Route to read media items - fetched from permanent Supabase database
+  app.get("/api/media", async (req, res) => {
     try {
-      ensureMediaSchema();
-      if (fs.existsSync(mediaFilePath)) {
-        const fileContent = fs.readFileSync(mediaFilePath, "utf8");
-        const mediaItems = JSON.parse(fileContent);
-        if (Array.isArray(mediaItems) && mediaItems.length > 0) {
-          return res.json(mediaItems);
-        }
+      const { data, error } = await supabase
+        .from("videos")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
       }
-      return res.json(INITIAL_MEDIA_ITEMS);
-    } catch (error) {
-      console.error("Error reading media-items.json, using fallback:", error);
-      return res.json(INITIAL_MEDIA_ITEMS);
+
+      if (data && Array.isArray(data)) {
+        const mapped = data.map(mapRowToMediaItem);
+        // Save locally as Cache fallback
+        try {
+          fs.writeFileSync(mediaFilePath, JSON.stringify(mapped, null, 2), "utf8");
+        } catch (e) {
+          console.warn("Could not save media cache file:", e);
+        }
+        return res.json(mapped);
+      }
+      
+      throw new Error("No data returned from videos table");
+    } catch (dbError: any) {
+      console.warn("Supabase Fetch 'videos' Failed (Possibly table is not created yet). Using local JSON cache fallback:", dbError.message || dbError);
+      
+      try {
+        ensureMediaSchema();
+        if (fs.existsSync(mediaFilePath)) {
+          const fileContent = fs.readFileSync(mediaFilePath, "utf8");
+          const mediaItems = JSON.parse(fileContent);
+          if (Array.isArray(mediaItems) && mediaItems.length > 0) {
+            return res.json(mediaItems);
+          }
+        }
+        return res.json(INITIAL_MEDIA_ITEMS);
+      } catch (error) {
+        console.error("Error reading fallback media-items.json:", error);
+        return res.json(INITIAL_MEDIA_ITEMS);
+      }
     }
   });
 
   // API Route to save media items permanently
-  app.post("/api/media", (req, res) => {
+  app.post("/api/media", async (req, res) => {
     try {
       const mediaItems = req.body;
       if (!Array.isArray(mediaItems)) {
         return res.status(400).json({ error: "Invalid payload: must be an array of media items." });
       }
 
-      // Check for empty array save - write defaults instead, unless they explicitly edited to clear
       let collectionToSave = mediaItems;
       if (mediaItems.length === 0) {
         collectionToSave = INITIAL_MEDIA_ITEMS;
       }
 
-      // Ensure directory exists
+      // 1. Persist to Supabase if possible
+      try {
+        const ids = collectionToSave.map(item => item.id);
+        if (ids.length > 0) {
+          // Wrap with quotes to be single-quote safe inside sql "in" statement
+          const escapedIdsStr = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
+          await supabase.from("videos").delete().not("id", "in", `(${escapedIdsStr})`);
+        } else {
+          await supabase.from("videos").delete().neq("id", "placeholder_impossible_id");
+        }
+
+        const rows = collectionToSave.map(mapMediaItemToRow);
+        const { error } = await supabase.from("videos").upsert(rows);
+        if (error) throw error;
+        console.log("Successfully synchronized media items to Supabase videos table");
+      } catch (dbError: any) {
+        console.warn("Could not save to Supabase 'videos' table, falling back to local files:", dbError.message || dbError);
+      }
+
+      // 2. Persist to local cache
       const dirPath = path.dirname(mediaFilePath);
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
-
-      // Write parsed media files back to workspace files
       fs.writeFileSync(mediaFilePath, JSON.stringify(collectionToSave, null, 2), "utf8");
       
-      // Also write to dist/src/db if in production to make sure it is updated in served cache
       const prodMediaFilePath = path.join(process.cwd(), "dist", "src", "db", "media-items.json");
       const prodDirPath = path.dirname(prodMediaFilePath);
       if (fs.existsSync(prodDirPath)) {
@@ -194,39 +337,81 @@ async function startServer() {
   });
 
   // API Route to read leads
-  app.get("/api/leads", (req, res) => {
+  app.get("/api/leads", async (req, res) => {
     try {
-      if (fs.existsSync(leadsFilePath)) {
-        const fileContent = fs.readFileSync(leadsFilePath, "utf8");
-        const leads = JSON.parse(fileContent);
-        return res.json(leads);
-      } else {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .order("timestamp", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data && Array.isArray(data)) {
+        const mapped = data.map(mapRowToLead);
+        try {
+          fs.writeFileSync(leadsFilePath, JSON.stringify(mapped, null, 2), "utf8");
+        } catch (e) {
+          console.warn("Could not save leads cache file:", e);
+        }
+        return res.json(mapped);
+      }
+      throw new Error("No data returned from leads table");
+    } catch (dbError: any) {
+      console.warn("Supabase Fetch 'leads' Failed. Using local JSON cache fallback:", dbError.message || dbError);
+      try {
+        if (fs.existsSync(leadsFilePath)) {
+          const fileContent = fs.readFileSync(leadsFilePath, "utf8");
+          const leads = JSON.parse(fileContent);
+          return res.json(leads);
+        }
+        return res.json([]);
+      } catch (error) {
+        console.error("Error reading leads.json:", error);
         return res.json([]);
       }
-    } catch (error) {
-      console.error("Error reading leads.json:", error);
-      return res.status(500).json({ error: "Failed to read leads" });
     }
   });
 
   // API Route to save leads
-  app.post("/api/leads", (req, res) => {
+  app.post("/api/leads", async (req, res) => {
     try {
       const leads = req.body;
       if (!Array.isArray(leads)) {
         return res.status(400).json({ error: "Invalid payload: must be an array of leads." });
       }
 
-      // Ensure directory exists
+      // 1. Sync list to Supabase if possible
+      try {
+        const emails = leads.map(l => l.email);
+        if (emails.length > 0) {
+          const formattedEmails = emails.map(m => `'${m.replace(/'/g, "''")}'`).join(",");
+          await supabase.from("leads").delete().not("email", "in", `(${formattedEmails})`);
+        } else {
+          await supabase.from("leads").delete().neq("email", "placeholder_impossible_email");
+        }
+
+        const rows = leads.map(l => ({
+          email: l.email,
+          timestamp: l.timestamp || new Date().toISOString(),
+          status: l.status || "pending"
+        }));
+
+        const { error } = await supabase.from("leads").upsert(rows);
+        if (error) throw error;
+        console.log("Successfully synchronized leads to Supabase leads table");
+      } catch (dbError: any) {
+        console.warn("Could not save to Supabase 'leads' table, falling back to local files:", dbError.message || dbError);
+      }
+
+      // 2. Sync to local JSON
       const dirPath = path.dirname(leadsFilePath);
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
-
-      // Write back to workspace files
       fs.writeFileSync(leadsFilePath, JSON.stringify(leads, null, 2), "utf8");
       
-      // Also write to dist/src/db if in production
       const prodLeadsFilePath = path.join(process.cwd(), "dist", "src", "db", "leads.json");
       const prodDirPath = path.dirname(prodLeadsFilePath);
       if (fs.existsSync(prodDirPath)) {
@@ -243,6 +428,35 @@ async function startServer() {
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // API to check connection status of Supabase
+  app.get("/api/supabase-status", async (req, res) => {
+    try {
+      const videosTest = await supabase.from("videos").select("id").limit(1);
+      const leadsTest = await supabase.from("leads").select("email").limit(1);
+      
+      const vOk = !videosTest.error;
+      const lOk = !leadsTest.error;
+      
+      return res.json({
+        supabaseUrl: SUPABASE_URL,
+        videosTableOk: vOk,
+        leadsTableOk: lOk,
+        videosError: videosTest.error ? videosTest.error.message : null,
+        leadsError: leadsTest.error ? leadsTest.error.message : null,
+        allOk: vOk && lOk
+      });
+    } catch (err: any) {
+      return res.json({
+        supabaseUrl: SUPABASE_URL,
+        videosTableOk: false,
+        leadsTableOk: false,
+        videosError: err?.message || String(err),
+        leadsError: err?.message || String(err),
+        allOk: false
+      });
+    }
   });
 
   // Serve custom local uploads statically for immediate rendering

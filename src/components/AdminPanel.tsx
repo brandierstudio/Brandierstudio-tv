@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Plus, 
@@ -19,7 +19,9 @@ import {
   FileVideo,
   Monitor,
   Sparkles,
-  Image
+  Image,
+  Download,
+  Upload
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { MediaItem, Lead } from '../types';
@@ -59,6 +61,34 @@ export default function AdminPanel({
 
   // Success messages
   const [successMsg, setSuccessMsg] = useState('');
+  
+  // Supabase connection and schema integrity status trackers
+  const [supabaseStatus, setSupabaseStatus] = useState<{
+    supabaseUrl: string;
+    videosTableOk: boolean;
+    leadsTableOk: boolean;
+    videosError: string | null;
+    leadsError: string | null;
+    allOk: boolean;
+  } | null>(null);
+
+  const checkSupabaseStatus = async () => {
+    try {
+      const resp = await fetch('/api/supabase-status');
+      if (resp.ok) {
+        const data = await resp.json();
+        setSupabaseStatus(data);
+      }
+    } catch (err) {
+      console.warn("Could not fetch Supabase status:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      checkSupabaseStatus();
+    }
+  }, [isAuthenticated, mediaItems]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [uploadingField, setUploadingField] = useState<'thumbnail' | 'video' | null>(null);
 
@@ -161,6 +191,52 @@ export default function AdminPanel({
   const showTemporarySuccess = (msg: string) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 4500);
+  };
+
+  const [showSqlSetup, setShowSqlSetup] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleCopySql = () => {
+    const sqlCode = `-- 1. CREATE VIDEOS WORKSPACE DATABASE TABLE
+CREATE TABLE IF NOT EXISTS videos (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  thumbnail_url TEXT,
+  video_url TEXT,
+  instagram_url TEXT,
+  linkedin_url TEXT,
+  tiktok_url TEXT,
+  tags TEXT[] DEFAULT '{}',
+  tools TEXT[] DEFAULT '{}',
+  duration TEXT,
+  is_premium BOOLEAN DEFAULT false,
+  is_spotlight BOOLEAN DEFAULT false,
+  is_coming_soon BOOLEAN DEFAULT false,
+  slug TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  aspect_ratio TEXT
+);
+
+-- Bypassing Row Level Security (RLS) for seamless client permissions
+ALTER TABLE videos DISABLE ROW LEVEL SECURITY;
+
+-- 2. CREATE ACTIVE NEWSLETTER SUBSCRIBERS TABLE
+CREATE TABLE IF NOT EXISTS leads (
+  email TEXT PRIMARY KEY,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'pending'
+);
+
+ALTER TABLE leads DISABLE ROW LEVEL SECURITY;`;
+
+    navigator.clipboard.writeText(sqlCode).then(() => {
+      setCopiedSql(true);
+      setTimeout(() => setCopiedSql(false), 2500);
+      showTemporarySuccess('Supabase Postgres SQL schema copied to clipboard!');
+    });
   };
 
   const validateForm = (): boolean => {
@@ -709,6 +785,158 @@ export default function AdminPanel({
           </form>
         </motion.div>
       )}
+
+      {/* Supabase Cloud Live Synchronization Console */}
+      <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-6 mb-8 shadow-xs overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {supabaseStatus ? (
+                supabaseStatus.allOk ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                    Live Cloud Synced
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                    ⚠️ Setup Needed: Tables Missing
+                  </span>
+                )
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-gray-50 text-gray-500 border border-gray-200">
+                  Checking Connection...
+                </span>
+              )}
+
+              <h3 className="font-display font-semibold text-xs uppercase tracking-wider text-black">
+                Supabase Cloud Database Configured
+              </h3>
+            </div>
+            
+            <p className="text-xs text-gray-500 max-w-2xl leading-relaxed">
+              Your server uses permanent Supabase Cloud storage for zero-loss visitor data parity. 
+              {supabaseStatus && !supabaseStatus.allOk && (
+                <span className="block mt-2 font-medium text-amber-600">
+                  ❌ Error detected: Supabase reports that the required tables do not exist yet. Please follow the instructions below to run the SQL query in your Supabase Dashboard to instantiate your tables.
+                </span>
+              )}
+              {supabaseStatus && supabaseStatus.allOk && (
+                <span className="block mt-1 font-medium text-emerald-600">
+                  ✓ Connection established. All queries are executing directly on your live production container. Local file fallbacks are offline.
+                </span>
+              )}
+            </p>
+
+            {supabaseStatus && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-2 border-t border-gray-100">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-gray-600">"videos" table state:</span>
+                  {supabaseStatus.videosTableOk ? (
+                    <span className="text-[10px] font-bold uppercase text-emerald-600">Active</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase text-amber-600">Schema Required</span>
+                  )}
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-gray-600">"leads" table state:</span>
+                  {supabaseStatus.leadsTableOk ? (
+                    <span className="text-[10px] font-bold uppercase text-emerald-600">Active</span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase text-amber-600">Schema Required</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0 self-end md:self-auto">
+            <button
+              onClick={() => setShowSqlSetup(!showSqlSetup)}
+              type="button"
+              className="px-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-[#E5E7EB] text-gray-800 text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors shadow-2xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              {showSqlSetup ? 'Hide SQL Code' : 'View SQL Setup Schema'}
+            </button>
+            <button
+              onClick={handleCopySql}
+              type="button"
+              className="px-4 py-2.5 bg-black hover:bg-black/95 text-white text-xs font-semibold rounded-xl flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+            >
+              <Download className="w-3.5 h-3.5 text-white" />
+              {copiedSql ? 'Schema Copied!' : 'Copy SQL Script'}
+            </button>
+          </div>
+        </div>
+
+        {(showSqlSetup || (supabaseStatus && !supabaseStatus.allOk)) && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-6 border-t border-gray-100 pt-6 animate-fadeIn"
+          >
+            <p className="text-xs text-amber-600 font-semibold mb-3 flex items-center gap-1.5">
+              <span>⚠️ ACTION REQUIRED to complete Supabase integration:</span>
+            </p>
+            <ol className="list-decimal list-inside text-xs text-gray-600 space-y-2 mb-4 bg-amber-50/50 p-4 rounded-xl border border-amber-100">
+              <li>Open your <strong>Supabase Dashboard</strong> at <a href={supabaseStatus?.supabaseUrl || "https://supabase.com"} target="_blank" rel="noreferrer" className="text-black underline font-semibold">https://supabase.com</a></li>
+              <li>Navigate to your active project database and click on the <strong>SQL Editor</strong> tab on the left sidebar navigation menu.</li>
+              <li>Click <strong>New Query</strong>, paste the copied SQL schema below into the code sandbox sheet.</li>
+              <li>Click the green <strong>Run</strong> button at the bottom-right of your editor. The console status will update to <span className="text-emerald-600 font-bold">"Live Cloud Synced"</span> on self-refresh!</li>
+            </ol>
+            
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleCopySql}
+                className="absolute top-3 right-3 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 text-[10px] font-bold rounded-lg shadow-sm"
+              >
+                {copiedSql ? 'Copied!' : 'Copy Schema'}
+              </button>
+              <pre className="p-4 bg-gray-50 text-[11px] font-mono text-gray-700 rounded-xl overflow-x-auto border border-gray-100 max-h-[300px] leading-relaxed">
+{`-- 1. CREATE VIDEOS WORKSPACE DATABASE TABLE
+CREATE TABLE IF NOT EXISTS videos (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  thumbnail_url TEXT,
+  video_url TEXT,
+  instagram_url TEXT,
+  linkedin_url TEXT,
+  tiktok_url TEXT,
+  tags TEXT[] DEFAULT '{}',
+  tools TEXT[] DEFAULT '{}',
+  duration TEXT,
+  is_premium BOOLEAN DEFAULT false,
+  is_spotlight BOOLEAN DEFAULT false,
+  is_coming_soon BOOLEAN DEFAULT false,
+  slug TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  aspect_ratio TEXT
+);
+
+-- Bypassing Row Level Security (RLS) for seamless client permissions
+ALTER TABLE videos DISABLE ROW LEVEL SECURITY;
+
+-- 2. CREATE ACTIVE NEWSLETTER SUBSCRIBERS TABLE
+CREATE TABLE IF NOT EXISTS leads (
+  email TEXT PRIMARY KEY,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  status TEXT DEFAULT 'pending'
+);
+
+ALTER TABLE leads DISABLE ROW LEVEL SECURITY;`}
+              </pre>
+            </div>
+          </motion.div>
+        )}
+      </div>
 
       {/* Database Listing Table */}
       <div className="bg-white rounded-[24px] border border-[#E5E7EB] overflow-hidden shadow-xs">
