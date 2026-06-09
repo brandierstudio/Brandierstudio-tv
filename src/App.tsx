@@ -5,8 +5,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  getStoredMedia, 
-  saveStoredMedia, 
   CATEGORIES 
 } from './db/mockDb';
 import { MediaItem, Lead } from './types';
@@ -76,13 +74,7 @@ export default function App() {
     return localStorage.getItem('brandier_current_email') || '';
   });
 
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('brandier_leads') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   const checkPremiumUnlock = () => {
     if (!currentEmail) return false;
@@ -118,7 +110,6 @@ export default function App() {
       };
       updated = [newLead, ...leads];
       setLeads(updated);
-      localStorage.setItem('brandier_leads', JSON.stringify(updated));
       syncLeadsToServer(updated);
     }
     
@@ -129,20 +120,17 @@ export default function App() {
   const handleApproveLead = (email: string) => {
     const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'approved' as const } : l);
     setLeads(updated);
-    localStorage.setItem('brandier_leads', JSON.stringify(updated));
     syncLeadsToServer(updated);
   };
 
   const handleRejectLead = (email: string) => {
     const updated = leads.map(l => l.email.toLowerCase() === email.toLowerCase() ? { ...l, status: 'rejected' as const } : l);
     setLeads(updated);
-    localStorage.setItem('brandier_leads', JSON.stringify(updated));
     syncLeadsToServer(updated);
   };
 
   const handleClearLeads = () => {
     setLeads([]);
-    localStorage.removeItem('brandier_leads');
     setCurrentEmail('');
     localStorage.removeItem('brandier_current_email');
     syncLeadsToServer([]);
@@ -159,11 +147,13 @@ export default function App() {
 
   // Load items on mount and maintain a real-time sync loop
   useEffect(() => {
-    // 1. Initial quick load from localStorage fallback
-    const localItems = getStoredMedia();
-    setMediaItems(localItems);
+    // Purge legacy client localStorage caches to sync fresh state with Supabase
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('brandier_media_items');
+      localStorage.removeItem('brandier_leads');
+    }
 
-    // 2. Load master copy of media from Express cloud server
+    // 1. Load copy of media from Express cloud server connected to Supabase
     const fetchMedia = () => {
       fetch('/api/media')
         .then(res => {
@@ -173,15 +163,14 @@ export default function App() {
         .then((serverItems: MediaItem[]) => {
           if (serverItems && Array.isArray(serverItems)) {
             setMediaItems(serverItems);
-            saveStoredMedia(serverItems);
           }
         })
         .catch(err => {
-          console.warn('Fallback to local items; could not load from master server:', err);
+          console.warn('Could not load from master server:', err);
         });
     };
 
-    // 3. Load master copy of subscriber leads from Express cloud server
+    // 2. Load master copy of subscriber leads from Express cloud server connected to Supabase
     const fetchLeads = () => {
       fetch('/api/leads')
         .then(res => {
@@ -191,7 +180,6 @@ export default function App() {
         .then((serverLeads: Lead[]) => {
           if (serverLeads && Array.isArray(serverLeads)) {
             setLeads(serverLeads);
-            localStorage.setItem('brandier_leads', JSON.stringify(serverLeads));
           }
         })
         .catch(err => {
@@ -203,7 +191,7 @@ export default function App() {
     fetchMedia();
     fetchLeads();
 
-    // Setup an passive background synchronization interval (every 3.5 seconds)
+    // Setup background synchronization interval (every 3.5 seconds)
     // This connects administrators and viewers seamlessly so status approvals sync live!
     const syncInterval = setInterval(() => {
       fetchMedia();
@@ -238,11 +226,10 @@ export default function App() {
   };
 
   const handleSaveItems = async (updated: MediaItem[]) => {
-    // Instantly update UI and client cache
+    // Instantly update UI state
     setMediaItems(updated);
-    saveStoredMedia(updated);
     
-    // Persist securely on backend disk/database
+    // Persist securely on backend database
     try {
       await fetch('/api/media', {
         method: 'POST',

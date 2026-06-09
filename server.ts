@@ -111,91 +111,6 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
-  const mediaFilePath = path.join(process.cwd(), "src", "db", "media-items.json");
-  const leadsFilePath = path.join(process.cwd(), "src", "db", "leads.json");
-
-  // Default initial media items fallback embedded for 100% reliable self-healing of db files
-  const INITIAL_MEDIA_ITEMS = [
-    {
-      "id": "item-1",
-      "type": "video",
-      "title": "AI UGC trailer for fashion cosmetic brand",
-      "description": "a simple idea is to make an aesthetic testimonial of a product. So here it is an idea.",
-      "category": "AI UGC",
-      "thumbnailUrl": "https://img.youtube.com/vi/TouX02-NGhY/hqdefault.jpg",
-      "videoUrl": "https://youtube.com/shorts/TouX02-NGhY?feature=share",
-      "tags": ["Cosmetic", "Fashion", "AI Video"],
-      "tools": ["Runway Gen-3", "Midjourney v6"],
-      "duration": "1:00",
-      "isSpotlight": true,
-      "slug": "ai-ugc-trailer-fashion-cosmetic",
-      "createdAt": "2026-06-08T12:00:00.000Z",
-      "aspectRatio": "9:16"
-    },
-    {
-      "id": "item-2",
-      "type": "video",
-      "title": "frendh brand app promo",
-      "description": "testemonial + UGC. All doen with ai,",
-      "category": "AI UGC",
-      "thumbnailUrl": "",
-      "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-      "tags": ["French", "Promo", "UGC"],
-      "tools": ["Luma Dream Machine", "ElevenLabs"],
-      "duration": "0:18",
-      "isSpotlight": true,
-      "slug": "french-brand-app-promo",
-      "createdAt": "2026-06-08T11:00:00.000Z",
-      "aspectRatio": "16:9"
-    },
-    {
-      "id": "item-3",
-      "type": "video",
-      "title": "real brand fashion story",
-      "description": "Cinematic visual design. Elevating brands through state-of-the-art AI content creation workflow.",
-      "category": "AI UGC",
-      "thumbnailUrl": "",
-      "videoUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-      "tags": ["Aesthetic", "Fashion", "Commercial"],
-      "tools": ["Sora AI", "After Effects"],
-      "duration": "0:45",
-      "isSpotlight": true,
-      "slug": "real-brand-fashion-story",
-      "createdAt": "2026-06-08T10:00:00.000Z",
-      "aspectRatio": "16:9"
-    }
-  ];
-
-  // Helper function to seed initial media if not present or empty
-  const ensureMediaSchema = () => {
-    try {
-      let needsSeed = true;
-      if (fs.existsSync(mediaFilePath)) {
-        const fileContent = fs.readFileSync(mediaFilePath, "utf8").trim();
-        if (fileContent.length > 5) {
-          const parsed = JSON.parse(fileContent);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            needsSeed = false;
-          }
-        }
-      }
-      
-      if (needsSeed) {
-        const dirPath = path.dirname(mediaFilePath);
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true });
-        }
-        fs.writeFileSync(mediaFilePath, JSON.stringify(INITIAL_MEDIA_ITEMS, null, 2), "utf8");
-        console.log("Successfully seeded default media-items.json");
-      }
-    } catch (e) {
-      console.warn("Failed to check/seed default media-items:", e);
-    }
-  };
-
-  // Run on startup
-  ensureMediaSchema();
-
   // API Route to read media items - fetched from permanent Supabase database
   app.get("/api/media", async (req, res) => {
     try {
@@ -205,38 +120,14 @@ async function startServer() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        throw error;
+        return res.status(500).json({ error: error.message });
       }
 
-      if (data && Array.isArray(data)) {
-        const mapped = data.map(mapRowToMediaItem);
-        // Save locally as Cache fallback
-        try {
-          fs.writeFileSync(mediaFilePath, JSON.stringify(mapped, null, 2), "utf8");
-        } catch (e) {
-          console.warn("Could not save media cache file:", e);
-        }
-        return res.json(mapped);
-      }
-      
-      throw new Error("No data returned from videos table");
+      const mapped = (data || []).map(mapRowToMediaItem);
+      return res.json(mapped);
     } catch (dbError: any) {
-      console.warn("Supabase Fetch 'videos' Failed (Possibly table is not created yet). Using local JSON cache fallback:", dbError.message || dbError);
-      
-      try {
-        ensureMediaSchema();
-        if (fs.existsSync(mediaFilePath)) {
-          const fileContent = fs.readFileSync(mediaFilePath, "utf8");
-          const mediaItems = JSON.parse(fileContent);
-          if (Array.isArray(mediaItems) && mediaItems.length > 0) {
-            return res.json(mediaItems);
-          }
-        }
-        return res.json(INITIAL_MEDIA_ITEMS);
-      } catch (error) {
-        console.error("Error reading fallback media-items.json:", error);
-        return res.json(INITIAL_MEDIA_ITEMS);
-      }
+      console.error("Supabase Fetch 'videos' Failed:", dbError);
+      return res.status(500).json({ error: dbError.message || String(dbError) });
     }
   });
 
@@ -248,47 +139,25 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid payload: must be an array of media items." });
       }
 
-      let collectionToSave = mediaItems;
-      if (mediaItems.length === 0) {
-        collectionToSave = INITIAL_MEDIA_ITEMS;
+      const ids = mediaItems.map(item => item.id);
+      if (ids.length > 0) {
+        // Wrap with quotes to be single-quote safe inside sql "in" statement
+        const escapedIdsStr = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
+        await supabase.from("videos").delete().not("id", "in", `(${escapedIdsStr})`);
+      } else {
+        await supabase.from("videos").delete().neq("id", "placeholder_impossible_id");
       }
 
-      // 1. Persist to Supabase if possible
-      try {
-        const ids = collectionToSave.map(item => item.id);
-        if (ids.length > 0) {
-          // Wrap with quotes to be single-quote safe inside sql "in" statement
-          const escapedIdsStr = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(",");
-          await supabase.from("videos").delete().not("id", "in", `(${escapedIdsStr})`);
-        } else {
-          await supabase.from("videos").delete().neq("id", "placeholder_impossible_id");
-        }
-
-        const rows = collectionToSave.map(mapMediaItemToRow);
-        const { error } = await supabase.from("videos").upsert(rows);
-        if (error) throw error;
-        console.log("Successfully synchronized media items to Supabase videos table");
-      } catch (dbError: any) {
-        console.warn("Could not save to Supabase 'videos' table, falling back to local files:", dbError.message || dbError);
+      const rows = mediaItems.map(mapMediaItemToRow);
+      const { error } = await supabase.from("videos").upsert(rows);
+      if (error) {
+        return res.status(500).json({ error: error.message });
       }
 
-      // 2. Persist to local cache
-      const dirPath = path.dirname(mediaFilePath);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
-      fs.writeFileSync(mediaFilePath, JSON.stringify(collectionToSave, null, 2), "utf8");
-      
-      const prodMediaFilePath = path.join(process.cwd(), "dist", "src", "db", "media-items.json");
-      const prodDirPath = path.dirname(prodMediaFilePath);
-      if (fs.existsSync(prodDirPath)) {
-        fs.writeFileSync(prodMediaFilePath, JSON.stringify(collectionToSave, null, 2), "utf8");
-      }
-
-      return res.json({ success: true, message: "Media items saved successfully!" });
-    } catch (error) {
-      console.error("Error writing media-items.json:", error);
-      return res.status(500).json({ error: "Failed to save media items" });
+      return res.json({ success: true, message: "Media items saved successfully to Supabase!" });
+    } catch (error: any) {
+      console.error("Error saving media items:", error);
+      return res.status(500).json({ error: error.message || "Failed to save media items" });
     }
   });
 
@@ -336,7 +205,7 @@ async function startServer() {
     }
   });
 
-  // API Route to read leads
+  // API Route to read leads from Supabase directly
   app.get("/api/leads", async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -345,36 +214,18 @@ async function startServer() {
         .order("timestamp", { ascending: false });
 
       if (error) {
-        throw error;
+        return res.status(500).json({ error: error.message });
       }
 
-      if (data && Array.isArray(data)) {
-        const mapped = data.map(mapRowToLead);
-        try {
-          fs.writeFileSync(leadsFilePath, JSON.stringify(mapped, null, 2), "utf8");
-        } catch (e) {
-          console.warn("Could not save leads cache file:", e);
-        }
-        return res.json(mapped);
-      }
-      throw new Error("No data returned from leads table");
+      const mapped = (data || []).map(mapRowToLead);
+      return res.json(mapped);
     } catch (dbError: any) {
-      console.warn("Supabase Fetch 'leads' Failed. Using local JSON cache fallback:", dbError.message || dbError);
-      try {
-        if (fs.existsSync(leadsFilePath)) {
-          const fileContent = fs.readFileSync(leadsFilePath, "utf8");
-          const leads = JSON.parse(fileContent);
-          return res.json(leads);
-        }
-        return res.json([]);
-      } catch (error) {
-        console.error("Error reading leads.json:", error);
-        return res.json([]);
-      }
+      console.error("Supabase Fetch 'leads' Failed:", dbError);
+      return res.status(500).json({ error: dbError.message || String(dbError) });
     }
   });
 
-  // API Route to save leads
+  // API Route to save leads to Supabase directly
   app.post("/api/leads", async (req, res) => {
     try {
       const leads = req.body;
@@ -382,46 +233,29 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid payload: must be an array of leads." });
       }
 
-      // 1. Sync list to Supabase if possible
-      try {
-        const emails = leads.map(l => l.email);
-        if (emails.length > 0) {
-          const formattedEmails = emails.map(m => `'${m.replace(/'/g, "''")}'`).join(",");
-          await supabase.from("leads").delete().not("email", "in", `(${formattedEmails})`);
-        } else {
-          await supabase.from("leads").delete().neq("email", "placeholder_impossible_email");
-        }
-
-        const rows = leads.map(l => ({
-          email: l.email,
-          timestamp: l.timestamp || new Date().toISOString(),
-          status: l.status || "pending"
-        }));
-
-        const { error } = await supabase.from("leads").upsert(rows);
-        if (error) throw error;
-        console.log("Successfully synchronized leads to Supabase leads table");
-      } catch (dbError: any) {
-        console.warn("Could not save to Supabase 'leads' table, falling back to local files:", dbError.message || dbError);
+      const emails = leads.map(l => l.email);
+      if (emails.length > 0) {
+        const formattedEmails = emails.map(m => `'${m.replace(/'/g, "''")}'`).join(",");
+        await supabase.from("leads").delete().not("email", "in", `(${formattedEmails})`);
+      } else {
+        await supabase.from("leads").delete().neq("email", "placeholder_impossible_email");
       }
 
-      // 2. Sync to local JSON
-      const dirPath = path.dirname(leadsFilePath);
-      if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-      }
-      fs.writeFileSync(leadsFilePath, JSON.stringify(leads, null, 2), "utf8");
-      
-      const prodLeadsFilePath = path.join(process.cwd(), "dist", "src", "db", "leads.json");
-      const prodDirPath = path.dirname(prodLeadsFilePath);
-      if (fs.existsSync(prodDirPath)) {
-        fs.writeFileSync(prodLeadsFilePath, JSON.stringify(leads, null, 2), "utf8");
+      const rows = leads.map(l => ({
+        email: l.email,
+        timestamp: l.timestamp || new Date().toISOString(),
+        status: l.status || "pending"
+      }));
+
+      const { error } = await supabase.from("leads").upsert(rows);
+      if (error) {
+        return res.status(500).json({ error: error.message });
       }
 
-      return res.json({ success: true, message: "Leads saved successfully!" });
-    } catch (error) {
-      console.error("Error writing leads.json:", error);
-      return res.status(500).json({ error: "Failed to save leads" });
+      return res.json({ success: true, message: "Leads saved successfully to Supabase!" });
+    } catch (error: any) {
+      console.error("Error writing leads to Supabase:", error);
+      return res.status(500).json({ error: error.message || "Failed to save leads" });
     }
   });
 

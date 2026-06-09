@@ -62,33 +62,6 @@ export default function AdminPanel({
   // Success messages
   const [successMsg, setSuccessMsg] = useState('');
   
-  // Supabase connection and schema integrity status trackers
-  const [supabaseStatus, setSupabaseStatus] = useState<{
-    supabaseUrl: string;
-    videosTableOk: boolean;
-    leadsTableOk: boolean;
-    videosError: string | null;
-    leadsError: string | null;
-    allOk: boolean;
-  } | null>(null);
-
-  const checkSupabaseStatus = async () => {
-    try {
-      const resp = await fetch('/api/supabase-status');
-      if (resp.ok) {
-        const data = await resp.json();
-        setSupabaseStatus(data);
-      }
-    } catch (err) {
-      console.warn("Could not fetch Supabase status:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      checkSupabaseStatus();
-    }
-  }, [isAuthenticated, mediaItems]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [uploadingField, setUploadingField] = useState<'thumbnail' | 'video' | null>(null);
 
