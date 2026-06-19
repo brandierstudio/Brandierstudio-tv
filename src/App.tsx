@@ -225,21 +225,33 @@ export default function App() {
     }
   };
 
-  const handleSaveItems = async (updated: MediaItem[]) => {
+  const handleSaveItems = async (item: MediaItem, action: 'insert' | 'update' | 'delete') => {
     // Instantly update UI state
-    setMediaItems(updated);
+    let updatedList: MediaItem[];
+    if (action === 'insert') {
+      updatedList = [item, ...mediaItems];
+    } else if (action === 'update') {
+      updatedList = mediaItems.map((m) => (m.id === item.id ? item : m));
+    } else {
+      updatedList = mediaItems.filter((m) => m.id !== item.id);
+    }
+    setMediaItems(updatedList);
     
-    // Persist securely on backend database
+    // Persist securely on backend database using forced direct CRUD
     try {
-      await fetch('/api/media', {
+      const endpoint = action === 'delete' 
+        ? `/api/media/delete/${item.id}` 
+        : `/api/media/${action}`;
+        
+      await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updated),
+        body: action === 'delete' ? undefined : JSON.stringify(item),
       });
     } catch (err) {
-      console.error('Failed to sync saved media to server:', err);
+      console.error('Failed to execute direct Supabase CRUD operational flow:', err);
     }
   };
 

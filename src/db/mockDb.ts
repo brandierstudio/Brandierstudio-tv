@@ -36,27 +36,13 @@ export const TOOLS: string[] = [
 ];
 
 export function getStoredMedia(): MediaItem[] {
-  if (typeof window === 'undefined') return DEFAULT_MEDIA_ITEMS;
-  const stored = localStorage.getItem('brandier_media_items');
-  if (!stored) {
-    localStorage.setItem('brandier_media_items', JSON.stringify(DEFAULT_MEDIA_ITEMS));
-    return DEFAULT_MEDIA_ITEMS;
-  }
-  try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return DEFAULT_MEDIA_ITEMS;
-  }
+  return DEFAULT_MEDIA_ITEMS;
 }
 
 export function saveStoredMedia(items: MediaItem[]) {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('brandier_media_items', JSON.stringify(items));
-  }
+  // Hard-deprecated, no-op to satisfy potential legacy imports safely
 }
 
 export function resetMediaToDefault() {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('brandier_media_items', JSON.stringify(DEFAULT_MEDIA_ITEMS));
-  }
+  // Hard-deprecated, no-op
 }

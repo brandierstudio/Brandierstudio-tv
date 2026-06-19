@@ -30,7 +30,7 @@ import { getYoutubeId, getResolvedThumbnail } from '../utils/videoUtils';
 
 interface AdminPanelProps {
   mediaItems: MediaItem[];
-  onSaveItems: (items: MediaItem[]) => void;
+  onSaveItems: (item: MediaItem, action: 'insert' | 'update' | 'delete') => void;
   onNavigate: (path: string) => void;
   leads?: Lead[];
   onClearLeads?: () => void;
@@ -72,7 +72,6 @@ export default function AdminPanel({
     setUploadingField(field);
     try {
       const reader = new FileReader();
-      reader.readAsDataURL(file);
       reader.onload = async () => {
         try {
           const base64Data = reader.result as string;
@@ -106,6 +105,7 @@ export default function AdminPanel({
           setUploadingField(null);
         }
       };
+      reader.readAsDataURL(file);
     } catch (err) {
       console.error(err);
       setUploadingField(null);
@@ -155,9 +155,11 @@ export default function AdminPanel({
   };
 
   const handleDeleteClick = (id: string) => {
-    const updated = mediaItems.filter((m) => m.id !== id);
-    onSaveItems(updated);
-    showTemporarySuccess('Content deleted successfully.');
+    const itemToDelete = mediaItems.find((m) => m.id === id);
+    if (itemToDelete) {
+      onSaveItems(itemToDelete, 'delete');
+      showTemporarySuccess('Content deleted successfully.');
+    }
     setDeleteConfirmId(null);
   };
 
@@ -226,14 +228,11 @@ export default function AdminPanel({
       aspectRatio: editingItem!.aspectRatio || '16:9'
     };
 
-    let updatedList: MediaItem[];
     if (isEditingNew) {
-      updatedList = [finalizedItem, ...mediaItems];
+      onSaveItems(finalizedItem, 'insert');
     } else {
-      updatedList = mediaItems.map((m) => (m.id === finalizedItem.id ? finalizedItem : m));
+      onSaveItems(finalizedItem, 'update');
     }
-
-    onSaveItems(updatedList);
     setEditingItem(null);
     showTemporarySuccess(`Content ${isDraft ? 'saved as Draft' : 'published successfully'}!`);
   };
@@ -714,23 +713,7 @@ export default function AdminPanel({
       )}
 
 
-      {/* Active Media Library Status */}
-      <div className="bg-white rounded-[24px] border border-[#E5E7EB] p-6 mb-8 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <h3 className="font-display font-semibold text-xs uppercase tracking-wider text-black">
-              Supabase Postgres Engine Active
-            </h3>
-          </div>
-          <p className="text-xs text-gray-500 max-w-2xl leading-relaxed">
-            All videos and newsletter subscribers are directly connected, updated, and synced to your live cloud database in real-time.
-          </p>
-        </div>
-      </div>
+      {/* Active Media Library Status Removed */}
 
       {/* Database Listing Table */}
       <div className="bg-white rounded-[24px] border border-[#E5E7EB] overflow-hidden shadow-xs">

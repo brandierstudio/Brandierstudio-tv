@@ -161,6 +161,76 @@ async function startServer() {
     }
   });
 
+  // Forced Supabase CRUD operations: Asynchronous Direct `.insert()`
+  app.post("/api/media/insert", async (req, res) => {
+    try {
+      const item = req.body;
+      if (!item || !item.id) {
+        return res.status(400).json({ error: "Invalid payload: must be a media item with an id." });
+      }
+      const row = mapMediaItemToRow(item);
+      const { data, error } = await supabase
+        .from("videos")
+        .insert([row]);
+
+      if (error) {
+        console.error("Direct Supabase .insert() Failed:", error);
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json({ success: true, message: "Successfully inserted media item directly to live Supabase videos table!", data });
+    } catch (error: any) {
+      console.error("Error inserting media item:", error);
+      return res.status(500).json({ error: error.message || "Failed to insert media item" });
+    }
+  });
+
+  // Forced Supabase CRUD operations: Asynchronous Direct `.update()`
+  app.post("/api/media/update", async (req, res) => {
+    try {
+      const item = req.body;
+      if (!item || !item.id) {
+        return res.status(400).json({ error: "Invalid payload: must be a media item with an id." });
+      }
+      const row = mapMediaItemToRow(item);
+      const { data, error } = await supabase
+        .from("videos")
+        .update(row)
+        .eq("id", item.id);
+
+      if (error) {
+        console.error("Direct Supabase .update() Failed:", error);
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json({ success: true, message: "Successfully updated media item directly on live Supabase videos table!", data });
+    } catch (error: any) {
+      console.error("Error updating media item:", error);
+      return res.status(500).json({ error: error.message || "Failed to update media item" });
+    }
+  });
+
+  // Forced Supabase CRUD operations: Asynchronous Direct `.delete()`
+  app.post("/api/media/delete/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        return res.status(400).json({ error: "Missing media item id parameter." });
+      }
+      const { data, error } = await supabase
+        .from("videos")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error("Direct Supabase .delete() Failed:", error);
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json({ success: true, message: "Successfully deleted media item directly from live Supabase videos table!", data });
+    } catch (error: any) {
+      console.error("Error deleting media item:", error);
+      return res.status(500).json({ error: error.message || "Failed to delete media item" });
+    }
+  });
+
   // Unique Direct Upload endpoint supporting base64 device payloads!
   app.post("/api/upload", (req, res) => {
     try {
