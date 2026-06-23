@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { supabase, mapRowToMediaItem, mapMediaItemToRow, mapRowToLead, mapLeadToRow } from './lib/supabaseClient';
 import { 
   CATEGORIES 
 } from './db/mockDb';
@@ -85,15 +86,37 @@ export default function App() {
 
   const syncLeadsToServer = async (updatedLeads: Lead[]) => {
     try {
-      await fetch('/api/leads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatedLeads),
-      });
+      const emails = updatedLeads.map(l => l.email);
+      if (emails.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("leads")
+          .delete()
+          .not("email", "in", `(${emails.map(e => `"${e}"`).join(",")})`);
+        if (deleteError) {
+          console.error("Direct Supabase delete outdated leads rejected:", deleteError, "Code:", deleteError.code, "Message:", deleteError.message);
+        }
+      } else {
+        const { error: deleteError } = await supabase
+          .from("leads")
+          .delete()
+          .neq("email", "placeholder_impossible_email");
+        if (deleteError) {
+          console.error("Direct Supabase clear leads rejected:", deleteError, "Code:", deleteError.code, "Message:", deleteError.message);
+        }
+      }
+
+      if (updatedLeads.length > 0) {
+        const rows = updatedLeads.map(mapLeadToRow);
+        const { error: upsertError } = await supabase
+          .from("leads")
+          .upsert(rows);
+        if (upsertError) {
+          console.error("Direct Supabase upsert leads rejected:", upsertError, "Code:", upsertError.code, "Message:", upsertError.message);
+          throw upsertError;
+        }
+      }
     } catch (err) {
-      console.error('Failed to sync leads to server:', err);
+      console.error('Failed to sync leads directly to Supabase:', err);
     }
   };
 
@@ -153,38 +176,66 @@ export default function App() {
       localStorage.removeItem('brandier_leads');
     }
 
-    // 1. Load copy of media from Express cloud server connected to Supabase
-    const fetchMedia = () => {
-      fetch('/api/media')
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('Server returned non-200 status');
-        })
-        .then((serverItems: MediaItem[]) => {
-          if (serverItems && Array.isArray(serverItems)) {
-            setMediaItems(serverItems);
-          }
-        })
-        .catch(err => {
-          console.warn('Could not load from master server:', err);
-        });
+    // 1. Load copy of media directly from Supabase via client select
+    const fetchMedia = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('videos')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && Array.isArray(data)) {
+          const mapped = data.map(mapRowToMediaItem);
+          setMediaItems(mapped);
+        }
+      } catch (err) {
+        console.error('Direct Client-Side select from Supabase videos failed, falling back to local Express proxy:', err);
+        // Fallback to local Express proxy just in case
+        fetch('/api/media')
+          .then(res => res.json())
+          .then((serverItems: MediaItem[]) => {
+            if (serverItems && Array.isArray(serverItems)) {
+              setMediaItems(serverItems);
+            }
+          })
+          .catch(e => console.warn('Could not load from proxy fallback either:', e));
+      }
     };
 
-    // 2. Load master copy of subscriber leads from Express cloud server connected to Supabase
-    const fetchLeads = () => {
-      fetch('/api/leads')
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('Server returned non-200 status');
-        })
-        .then((serverLeads: Lead[]) => {
-          if (serverLeads && Array.isArray(serverLeads)) {
-            setLeads(serverLeads);
-          }
-        })
-        .catch(err => {
-          console.warn('Could not load leads from master server:', err);
-        });
+    // 2. Load master copy of subscriber leads directly from Supabase via client select
+    const fetchLeads = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .order('timestamp', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data && Array.isArray(data)) {
+          const mapped = data.map(mapRowToLead);
+          setLeads(mapped);
+        }
+      } catch (err) {
+        console.error('Direct Client-Side select from Supabase leads failed, falling back to local Express proxy:', err);
+        fetch('/api/leads')
+          .then(res => {
+            if (res.ok) return res.json();
+            throw new Error('Server returned non-200 status');
+          })
+          .then((serverLeads: Lead[]) => {
+            if (serverLeads && Array.isArray(serverLeads)) {
+              setLeads(serverLeads);
+            }
+          })
+          .catch(e => console.warn('Could not load leads from proxy fallback either:', e));
+      }
     };
 
     // Perform initial fetches
@@ -237,19 +288,29 @@ export default function App() {
     }
     setMediaItems(updatedList);
     
-    // Persist securely on backend database using forced direct CRUD
+    // Direct Client-Side Supabase CRUD integration
     try {
-      const endpoint = action === 'delete' 
-        ? `/api/media/delete/${item.id}` 
-        : `/api/media/${action}`;
-        
-      await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: action === 'delete' ? undefined : JSON.stringify(item),
-      });
+      if (action === 'insert') {
+        const row = mapMediaItemToRow(item);
+        const { error } = await supabase.from('videos').insert([row]);
+        if (error) {
+          console.error("Direct Client-Side Supabase insert rejected:", error, "Error Code:", error.code, "Message:", error.message);
+          throw error;
+        }
+      } else if (action === 'update') {
+        const row = mapMediaItemToRow(item);
+        const { error } = await supabase.from('videos').update(row).eq('id', item.id);
+        if (error) {
+          console.error("Direct Client-Side Supabase update rejected:", error, "Error Code:", error.code, "Message:", error.message);
+          throw error;
+        }
+      } else if (action === 'delete') {
+        const { error } = await supabase.from('videos').delete().eq('id', item.id);
+        if (error) {
+          console.error("Direct Client-Side Supabase delete rejected:", error, "Error Code:", error.code, "Message:", error.message);
+          throw error;
+        }
+      }
     } catch (err) {
       console.error('Failed to execute direct Supabase CRUD operational flow:', err);
     }

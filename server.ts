@@ -240,13 +240,11 @@ async function startServer() {
       }
 
       // Strip potential headers (e.g., 'data:image/png;base64,...')
-      const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      let dataBuffer: Buffer;
-      if (matches && matches.length === 3) {
-        dataBuffer = Buffer.from(matches[2], "base64");
-      } else {
-        dataBuffer = Buffer.from(base64Data, "base64");
+      let base64Content = base64Data;
+      if (base64Data.includes(",")) {
+        base64Content = base64Data.split(",")[1];
       }
+      const dataBuffer = Buffer.from(base64Content, "base64");
 
       // Set up safe targets
       const publicUploads = path.join(process.cwd(), "public", "uploads");
