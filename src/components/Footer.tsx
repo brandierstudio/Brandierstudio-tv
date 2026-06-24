@@ -62,7 +62,7 @@ export default function Footer({ onNavigate }: FooterProps) {
                 <span className="text-xs font-bold font-mono">@</span>
               </a>
               <a 
-                href="https://anasbinmehboob.github.io/brandier-studio/" 
+                href="https://brandierstudio.online/" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="w-8 h-8 rounded-lg border border-purple-200 flex items-center justify-center text-purple-500 hover:text-purple-700 hover:border-purple-500 transition-all bg-purple-50/50"
@@ -73,7 +73,7 @@ export default function Footer({ onNavigate }: FooterProps) {
                 <span className="text-xs font-bold">W</span>
               </a>
               <a 
-                href="https://linkedin.com" 
+                href="https://www.linkedin.com/company/brandier-studio/?viewAsMember=true" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:text-black hover:border-black transition-all"
