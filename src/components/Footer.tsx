@@ -43,7 +43,7 @@ export default function Footer({ onNavigate }: FooterProps) {
               Curating the absolute peak of artificial intelligence cinematography, UGC ad creatives, high-fashion storytelling, and responsive motion graphics. 
               {" "}
               <a 
-                href="https://anasbinmehboob.github.io/brandier-studio/"
+                href="https://brandierstudio.online/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-purple-600 hover:text-purple-700 underline font-semibold inline-block"
