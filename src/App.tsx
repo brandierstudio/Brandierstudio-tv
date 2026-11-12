@@ -1010,9 +1010,14 @@ export default function App() {
               Agency Mission
             </h2>
             <p className="text-sm text-gray-500 leading-relaxed font-normal">
-              Our core services are high-converting AI UGC ads and elite AI motion graphics. We also curate other elite media formats designed specifically to be streamed, watched, and enjoyed directly on our digital showcase.
+              Brandier Studio creates AI UGC ads and motion graphics, immersive 3D websites, AI agents, chatbots, and business automations. Brandier TV is our home for films and creative work.
             </p>
           </div>
+
+          <a href="https://web.brandierstudio.online/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 border border-purple-100 bg-purple-50/50 rounded-xl p-5 hover:border-purple-400 transition-colors">
+            <img src="/assets/network/brandier-web.png" alt="" width={36} height={36} className="object-contain" />
+            <div><span className="font-display font-semibold text-black block">Meet Brandier Web ↗</span><span className="text-xs text-gray-500">3D websites · AI agents &amp; chatbots · Automations</span></div>
+          </a>
 
           <div className="border-t border-gray-100 pt-8 space-y-6">
             <h3 className="font-mono text-xs font-bold uppercase tracking-widest text-[#151515]">

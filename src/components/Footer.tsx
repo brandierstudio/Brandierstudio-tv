@@ -40,7 +40,7 @@ export default function Footer({ onNavigate }: FooterProps) {
               </span>
             </button>
             <p className="text-sm text-gray-500 max-w-sm font-medium leading-relaxed">
-              Curating the absolute peak of artificial intelligence cinematography, UGC ad creatives, high-fashion storytelling, and responsive motion graphics. 
+              AI films, UGC ads, and motion graphics from Brandier Studio. Now also creating 3D websites, AI agents, chatbots, and business automations.
               {" "}
               <a 
                 href="https://brandierstudio.online/"
@@ -136,6 +136,10 @@ export default function Footer({ onNavigate }: FooterProps) {
           </div>
         </div>
 
+        <div className="flex flex-wrap gap-6 mt-10 text-sm font-medium">
+          <a href="https://web.brandierstudio.online/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 hover:text-black"><img src="/assets/network/brandier-web.png" alt="" width={28} height={28} />Brandier Web ↗</a>
+          <a href="https://anas.brandierstudio.online/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-600 hover:text-black"><span className="bg-black rounded p-1"><img src="/assets/network/anas.png" alt="" width={24} height={24} /></span>Anas Mehboob ↗</a>
+        </div>
         <div className="border-t border-brand-border mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-gray-400 font-medium tracking-wide">
             &copy; {new Date().getFullYear()} BrandierStudioTV. All rights reserved.
